@@ -54,7 +54,9 @@ import type { Routine, RoutineInput, RoutineRun, RoutineRunStatusFilter } from "
 import type { WebhookAttempt, WebhookIngressStatus, WebhookTrigger } from "@/lib/webhooks";
 import { duplicateBotProfile, restrictedCopyRequest } from "@/lib/bot-duplicate";
 import { botShowsUnread } from "@/lib/bot-unread";
-import { firstUnreadMessageId, threadOpensUnread, threadReadCursor } from "@/lib/unread-divider";
+import { threadOpensUnread, threadReadCursor } from "@/lib/unread-divider";
+import { deferAwaitingTranscripts, heldPatch, olderMessages, openedThread, requestOlderMessages, settleIfDeferred, switchedTranscript, transcriptLoaded, useDeferredTranscript, MESSAGE_PAGE_SIZE } from "./transcript-pages";
+export { MESSAGE_PAGE_SIZE } from "./transcript-pages";
 import type { ComputerStart } from "@/lib/computer-start";
 import { parseComputerHelp } from "@/lib/computer-control";
 import { answerResponse, dismissResponse } from "@/lib/card-answer";
@@ -399,12 +401,6 @@ function taskPatchFields(patch: TaskUpdatePatch): Partial<Task> {
     ...(link === undefined ? {} : { link: link ?? undefined }) };
 }
 
-function openedUnreadDivider(state: AppState, threadId: string, unread: boolean, messages: readonly Message[], lastReadMessageId?: string): AppState["unreadDivider"] {
-  if (!unread) return state.unreadDivider?.threadId === threadId ? state.unreadDivider : null;
-  const messageId = firstUnreadMessageId(messages, lastReadMessageId);
-  return messageId ? { threadId, messageId } : null;
-}
-
 import type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary } from "./config-status";
 export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary };
 
@@ -611,6 +607,7 @@ export interface AppState {
   dataView: import("@/lib/composer-attachments").DataViewContext | null;
   focusMessage: { threadId: string; messageId: string; matchText?: string; nonce: number; consumed: boolean } | null;
   unreadDivider: { threadId: string; messageId: string } | null;
+  deferredUnreadDivider: { threadId: string; lastReadMessageId?: string } | null;
   connected: boolean;
   hydrated?: true;
   error: string | null;
@@ -625,6 +622,8 @@ export interface AppState {
   consumedQueueIds: Record<string, true>;
   backgroundThreadEvents: Record<string, Array<Extract<Action, { type: "messageAdded" | "messagePatched" | "threadActive" | "optimisticMessageRemoved" }>>>;
   loadingOlder: Record<string, true>;
+  deferredTranscripts: Record<string, number>;
+  snapshotRevision: number;
   /** Bumped when a transcript is replaced or its branch moves, never on append; stale scrollback pages are dropped. */
   transcriptGeneration: Record<string, number>;
 }
@@ -643,6 +642,7 @@ export type Action =
       navigationSince?: AppState["transcriptGeneration"];
       taskIdsAtStart?: ReadonlySet<string>;
       resumeId?: string;
+      deferMessages?: boolean;
     }
   | { type: "botQueues"; queues: AppState["pendingQueued"] }
   | { type: "sections"; sections: string[] }
@@ -732,7 +732,8 @@ export type Action =
   | { type: "switchBranch"; botId: string; messageId: string; threadId?: string }
   | { type: "threadActive"; threadId: string; activeLeafId: string }
   | { type: "loadOlderMessages"; threadId: string }
-  | { type: "olderMessages"; threadId: string; generation: number; messages: Message[]; hasMore: boolean }
+  | { type: "olderMessages"; threadId: string; generation: number; revision?: number; messages: Message[]; hasMore: boolean }
+  | { type: "transcriptLoaded"; threadId: string; revision: number; generation: number; messages: Message[]; hasMore: boolean }
   | { type: "answerCard"; botId: string; messageId: string; answer: string; threadId?: string; groupId?: string }
   | { type: "answerCardFailed"; botId: string; messageId: string; answer: string; groupId?: string }
   | { type: "dismissCard"; botId: string; messageId: string; threadId?: string; groupId?: string }
@@ -891,6 +892,8 @@ function dismissOnboardingCard(state: AppState, botId: string): AppState {
 export const CLOUD_LINK_SETTINGS = { type: "toggleAppSettings", open: true, section: "cloudAccount", cloudLink: true } as const satisfies Action;
 
 export function reducer(state: AppState, action: Action): AppState {
+  const held = heldPatch(state, action);
+  if (held) return held;
   if (action.type === "messageAdded" || action.type === "messagePatched" || action.type === "threadActive" || action.type === "optimisticMessageRemoved") {
     const owner = state.bots.find((bot) => (bot.threadId !== action.threadId || bot.awaitingThreadSnapshot) && bot.tasks?.some((task) => task.threadId === action.threadId));
     if (owner) {
@@ -933,36 +936,20 @@ export function reducer(state: AppState, action: Action): AppState {
         transcriptGeneration: {},
         modelVariantSessions: {},
       };
+      const snapshot = action.deferMessages ? deferAwaitingTranscripts(hydrated) : { ...hydrated, deferredTranscripts: {} };
       return reconcileSnapshotQueues(
-        action.botQueuedMessages ? replaceBotQueues(hydrated, action.botQueuedMessages) : hydrated,
+        action.botQueuedMessages ? replaceBotQueues(snapshot, action.botQueuedMessages) : snapshot,
         [...action.bots, ...action.groups],
       );
     }
+    case "transcriptLoaded":
+      return transcriptLoaded(state, action, reducer);
     case "loadOlderMessages":
       return state.loadingOlder[action.threadId]
         ? state
         : { ...state, loadingOlder: { ...state.loadingOlder, [action.threadId]: true } };
-    case "olderMessages": {
-      const { [action.threadId]: _done, ...loadingOlder } = state.loadingOlder;
-      if ((state.transcriptGeneration[action.threadId] ?? 0) !== action.generation) {
-        return { ...state, loadingOlder };
-      }
-      const prepend = <T extends { messages: Message[]; threadId: string; hasMore?: boolean }>(owner: T): T => {
-        const held = new Set(owner.messages.map((message) => message.id));
-        return {
-          ...owner,
-          // A page that raced an edit can overlap held rows; the held copy is newer.
-          messages: [...action.messages.filter((message) => !held.has(message.id)), ...owner.messages],
-          hasMore: action.hasMore,
-        };
-      };
-      return {
-        ...state,
-        loadingOlder,
-        bots: state.bots.map((bot) => (bot.threadId === action.threadId ? prepend(bot) : bot)),
-        groups: state.groups.map((group) => (group.threadId === action.threadId ? prepend(group) : group)),
-      };
-    }
+    case "olderMessages":
+      return olderMessages(state, action, reducer);
     case "sectionDeleted":
       return {
         ...state, sections: action.sections,
@@ -1052,7 +1039,8 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "groupPatched": {
       const fenced = action.group.messages ? bumpTranscriptGeneration(state, action.group.threadId) : state;
-      return { ...fenced, groups: patchedGroups(state.groups, action.group) };
+      const patched = { ...fenced, groups: patchedGroups(state.groups, action.group) };
+      return action.group.messages ? settleIfDeferred(patched, action.group.threadId, reducer) : patched;
     }
     case "groupSnapshot": {
       const group = snapshotPatch(state, action);
@@ -1083,7 +1071,7 @@ export function reducer(state: AppState, action: Action): AppState {
       if (room) {
         return {
           ...(action.id === state.selectedId && state.activeView === "chat" ? state : closeUnpinnedTray(state)),
-          unreadDivider: openedUnreadDivider(state, room.threadId, room.unread, room.messages, room.lastReadMessageId),
+          ...openedThread(state, room.threadId, room.unread, room.messages, room.lastReadMessageId),
           activeView: "chat",
           selectedId: action.id,
           groups: state.groups.map((g) => (g.id === action.id ? { ...g, unread: false } : g)),
@@ -1094,9 +1082,9 @@ export function reducer(state: AppState, action: Action): AppState {
         withMascotMotion(
           {
             ...(action.id === state.selectedId && state.activeView === "chat" ? state : closeUnpinnedTray(state)),
-            unreadDivider: opened
-              ? openedUnreadDivider(state, opened.threadId, threadOpensUnread(opened), visibleMessages(opened), threadReadCursor(opened))
-              : state.unreadDivider,
+            ...(opened
+              ? openedThread(state, opened.threadId, threadOpensUnread(opened), visibleMessages(opened), threadReadCursor(opened))
+              : { unreadDivider: state.unreadDivider }),
             activeView: "chat",
             selectedId: action.id,
           },
@@ -1767,12 +1755,10 @@ export function reducer(state: AppState, action: Action): AppState {
         awaitingThreadSnapshot: false,
         switchingTo: undefined,
       }));
-      for (const frame of state.backgroundThreadEvents[action.bot.threadId] ?? []) switched = reducer(switched, frame);
-      const { [action.bot.threadId]: _settled, ...backgroundThreadEvents } = switched.backgroundThreadEvents;
-      switched = { ...switched, backgroundThreadEvents };
+      switched = switchedTranscript(switched, action.bot.id, action.bot.threadId, reducer);
       const opened = switched.bots.find((bot) => bot.id === action.bot.id);
       if (opened && opened.id === switched.selectedId) {
-        switched = { ...switched, unreadDivider: openedUnreadDivider(switched, opened.threadId, threadOpensUnread(opened), visibleMessages(opened), threadReadCursor(opened)) };
+        switched = { ...switched, ...openedThread(switched, opened.threadId, threadOpensUnread(opened), visibleMessages(opened), threadReadCursor(opened)) };
         // The snapshot predates the switch's own announcement and must not put the unread dot back.
         if (switched.activeView === "chat") switched = updateBot(switched, opened.id, (bot) => ({ ...bot,
           unread: Boolean(bot.tasks?.some((task) => task.threadId !== bot.threadId && task.unread)),
@@ -1856,6 +1842,8 @@ export const initialState: AppState = {
   modelVariantSessions: {},
   backgroundThreadEvents: {},
   loadingOlder: {},
+  deferredTranscripts: {},
+  snapshotRevision: 0,
   transcriptGeneration: {},
   bots: [],
   groups: [],
@@ -1908,6 +1896,7 @@ export const initialState: AppState = {
   dataView: null,
   focusMessage: null,
   unreadDivider: null,
+  deferredUnreadDivider: null,
   connected: false,
   error: null,
   notice: null,
@@ -1920,7 +1909,6 @@ export const initialState: AppState = {
 export { api, ApiError, liveCallFromFrame, nextLiveCallLookup };
 
 /** Messages per snapshot thread and per scrollback page: the server's own page maximum. */
-export const MESSAGE_PAGE_SIZE = 200;
 
 
 type TrustedApprovalBridge = {
@@ -2130,7 +2118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         send: (botId, patch, signal, currentBot, leaving) =>
           persistBotUpdate(botId, patch, signal, api, desktopApprovalBridge(), currentBot, leaving),
         reconcile: async (botId, signal) => {
-          const result: { bots: BotAnnouncement[] } = await api(`/api/bots?messages=${MESSAGE_PAGE_SIZE}`, { signal });
+          const result: { bots: BotAnnouncement[] } = await api("/api/bots?messages=0", { signal });
           return result.bots.find((candidate) => candidate.id === botId) ?? null;
         },
         onAuthoritative: (bot, optimisticOverlay) => {
@@ -2226,7 +2214,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Keep blocking sends while reconciliation fails (it is asked again) or a newer write owns this lane.
         if (taskWrites.get(threadId) === pending) {
           pending.patch = {};
-          retryRequest(() => taskWrites.get(threadId) === pending, () => api(`/api/bots?messages=${MESSAGE_PAGE_SIZE}`).then(({ bots }) => {
+          retryRequest(() => taskWrites.get(threadId) === pending, () => api("/api/bots?messages=0").then(({ bots }) => {
             const bot = taskWrites.get(threadId) === pending ? bots.find((candidate: Bot) => candidate.id === botId) : undefined;
             if (bot) {
               rawDispatch({ type: "botPatched", bot: withTaskWrites(bot) });
@@ -2312,36 +2300,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         action.type !== "deleteBot"
       ) rawDispatch(action);
       switch (action.type) {
-        case "loadOlderMessages": {
-          // The guard, not the reducer flag: stateRef still holds the pre-dispatch state.
-          if (olderPagesInFlight.has(action.threadId)) break;
-          olderPagesInFlight.add(action.threadId);
-          const current = stateRef.current;
-          const owner = [...current.bots, ...current.groups].find((candidate) => candidate.threadId === action.threadId);
-          const before = owner?.messages[0]?.id;
-          const generation = current.transcriptGeneration[action.threadId] ?? 0;
-          if (!before) {
-            olderPagesInFlight.delete(action.threadId);
-            rawDispatch({ type: "olderMessages", threadId: action.threadId, generation, messages: [], hasMore: false });
-            break;
-          }
-          api<{ messages: Message[]; hasMore?: boolean }>(
-            `/api/threads/${action.threadId}/messages?limit=${MESSAGE_PAGE_SIZE}&before=${encodeURIComponent(before)}`,
-          )
-            .finally(() => olderPagesInFlight.delete(action.threadId))
-            .then((page) => rawDispatch({
-              type: "olderMessages",
-              threadId: action.threadId,
-              generation,
-              messages: page.messages ?? [],
-              hasMore: Boolean(page.hasMore),
-            }))
-            .catch((error) => {
-              rawDispatch({ type: "olderMessages", threadId: action.threadId, generation, messages: [], hasMore: true });
-              showError(error);
-            });
+        case "loadOlderMessages":
+          // The in-flight set, not the reducer flag: stateRef still holds the pre-dispatch state.
+          requestOlderMessages(stateRef.current, action.threadId, olderPagesInFlight, rawDispatch, showError);
           break;
-        }
         case "notice":
           if (action.notice) setTimeout(() => rawDispatch({ type: "notice", notice: null }), action.notice.kind === "note" ? 20_000 : 6000);
           break;
@@ -3049,10 +3011,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {});
       const chat = () =>
-        api(`/api/bots?messages=${MESSAGE_PAGE_SIZE}`).then((answer) => snapshotArrays(answer, "bots")).then(({ bots, groups, sections, computerControl, botQueuedMessages }) => {
+        api("/api/bots?messages=0").then((answer) => snapshotArrays(answer, "bots")).then(({ bots, groups, sections, computerControl, botQueuedMessages }) => {
           if (!alive) return;
           rawDispatch({
             type: "hydrate",
+            deferMessages: true,
             bots,
             groups: groups ?? [],
             sections: sections ?? [],
@@ -3291,6 +3254,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const instanceProbes = useRef(new Map<string, Promise<void>>());
+  useDeferredTranscript(state, rawDispatch);
+
   const refreshInstances = useCallback(async (options?: { reportErrors?: boolean; cached?: boolean }) => {
     const path = options?.cached ? "/api/instances" : "/api/instances?fresh=1", probes = instanceProbes.current;
     const probe = probes.get(path) ?? api(path, { timeoutMs: 120_000 }).then(({ instances }) => {
