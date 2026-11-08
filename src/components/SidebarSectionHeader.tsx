@@ -24,6 +24,7 @@ export function SidebarSectionHeader({
   onContextMenu,
   line = false,
   onMenu,
+  reserveMenu = false,
   menuOpen = false,
   count,
   naming,
@@ -43,6 +44,8 @@ export function SidebarSectionHeader({
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
   line?: boolean;
   onMenu?: (button: HTMLButtonElement) => void;
+  /** Keep the ⋯ button's space when this line has none, so counts line up with lines that do (Simple). */
+  reserveMenu?: boolean;
   menuOpen?: boolean;
   /** How many rows the section holds, shown at rest where the chevron shows on hover (Simple). */
   count?: number;
@@ -101,7 +104,7 @@ export function SidebarSectionHeader({
             aria-expanded={!collapsed}
             aria-keyshortcuts={reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
             title={toggleTitle}
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
           >
             <span className="min-w-0 flex-1 truncate text-[12px] leading-4 text-ink-secondary">{name}</span>
             {collapsed && <SectionAttention attention={attention} label={attentionLabel} alert={alert} />}
@@ -127,6 +130,7 @@ export function SidebarSectionHeader({
             <MoreHorizontal size={15} aria-hidden="true" />
           </button>
         )}
+        {!onMenu && reserveMenu && !naming && <span aria-hidden="true" className="w-[22px] shrink-0" />}
       </div>
     );
   }
@@ -141,7 +145,7 @@ export function SidebarSectionHeader({
           aria-expanded={!collapsed}
           aria-keyshortcuts={reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
           title={toggleTitle}
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-raised/50"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-start hover:bg-raised/50"
         >
           <span className="truncate text-[12px] font-semibold text-ink-secondary">
             {name}

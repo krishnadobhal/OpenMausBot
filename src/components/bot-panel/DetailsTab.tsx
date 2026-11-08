@@ -17,7 +17,9 @@ type Derived = ReturnType<typeof useBotSettingsDerived>;
 export const CONVERSATION_ITEMS = ["find", "usage", "activity"];
 
 /** A ⋯ menu item drawn as a panel row: the same label, icon, value and handler. */
-function ItemRow({ item }: { item: SidebarMenuItem }) {
+export function ItemRow({ item }: { item: SidebarMenuItem }) {
+  // Only the usage value is long text that should wrap; shortcuts and other values keep their full width.
+  const wrapsValue = item.key === "usage";
   return (
     <button
       type="button"
@@ -25,13 +27,13 @@ function ItemRow({ item }: { item: SidebarMenuItem }) {
       disabled={item.disabled}
       aria-pressed={item.active || undefined}
       onClick={item.onSelect}
-      className={cn(rowCls, "w-full text-left enabled:hover:bg-ink/[0.03] disabled:cursor-default disabled:opacity-45")}
+      className={cn(rowCls, "w-full text-start enabled:hover:bg-ink/[0.03] disabled:cursor-default disabled:opacity-45")}
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/[0.05] text-ink-secondary [&_svg]:size-[15px]" aria-hidden="true">
         {item.icon}
       </span>
-      <span className={cn("min-w-0 flex-1 truncate text-[14px] font-medium", item.active ? "text-accent-text" : "text-ink")}>{item.label}</span>
-      {item.trailing && <span className="flex shrink-0 items-center">{item.trailing}</span>}
+      <span className={cn("min-w-0 truncate text-[14px] font-medium", !wrapsValue && "flex-1", item.active ? "text-accent-text" : "text-ink")}>{item.label}</span>
+      {item.trailing && <span className={cn("flex items-center", wrapsValue ? "min-w-0 flex-1 justify-end text-end" : "shrink-0")}>{item.trailing}</span>}
     </button>
   );
 }

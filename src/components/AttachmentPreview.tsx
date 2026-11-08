@@ -33,6 +33,7 @@ import {
 } from "@/lib/composer-attachments";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { serverErrorText } from "@/lib/server-error";
 import { FilePreviewButton } from "./FilePreviewButton";
 import { chipNameAction, SaveIconButton, useHtmlPreview } from "./HtmlFilePreview";
 import { ImageLoading } from "./ImageLoading";
@@ -65,10 +66,10 @@ export function wrappedImageIndex(index: number, step: -1 | 1, count: number): n
 
 export type PreviewKeyAction = "close" | "previous" | "next" | null;
 
-export function previewKeyAction(key: string, count: number): PreviewKeyAction {
+export function previewKeyAction(key: string, count: number, rtl = false): PreviewKeyAction {
   if (key === "Escape") return "close";
-  if (count > 1 && key === "ArrowLeft") return "previous";
-  if (count > 1 && key === "ArrowRight") return "next";
+  if (count > 1 && key === (rtl ? "ArrowRight" : "ArrowLeft")) return "previous";
+  if (count > 1 && key === (rtl ? "ArrowLeft" : "ArrowRight")) return "next";
   return null;
 }
 
@@ -235,7 +236,7 @@ export async function requestMessageFile(
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: string; code?: string } | null;
-    throw Object.assign(new Error(body?.error ?? t("attach.downloadFailed")), { code: body?.code });
+    throw Object.assign(new Error(serverErrorText(body, body?.error ?? t("attach.downloadFailed"))), { code: body?.code });
   }
   return response;
 }
@@ -251,7 +252,7 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
   const [folder, setFolder] = useState<MessageFolderListing | null>(null);
   const [reason, setReason] = useState("");
   const [savedTo, setSavedTo] = useState("");
-  const [outsideWorkspace, setOutsideWorkspace] = useState(false);
+  const [failureCode, setFailureCode] = useState<unknown>(undefined);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const request = useRef<AbortController | null>(null);
   const saving = useRef(false);
@@ -272,7 +273,7 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
     saving.current = false;
     setReason("");
     setSavedTo("");
-    setOutsideWorkspace(false);
+    setFailureCode(undefined);
     setFolder(null);
     setState("idle");
   }, [filePath, entry, message?.messageId, message?.threadId]);
@@ -290,7 +291,7 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
       resetTimer.current = null;
     }
     setReason("");
-    setOutsideWorkspace(false);
+    setFailureCode(undefined);
     setState("saving");
     request.current?.abort();
     const controller = new AbortController();
@@ -338,7 +339,7 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
     } catch (error) {
       if (!mounted.current || controller.signal.aborted) return;
       setReason(error instanceof Error ? error.message : t("attach.saveFailed"));
-      setOutsideWorkspace((error as { code?: unknown } | null)?.code === "outside_workspace");
+      setFailureCode((error as { code?: unknown } | null)?.code);
       setState("failed");
     } finally {
       if (request.current === controller) {
@@ -348,7 +349,8 @@ export function useLocalFileSave(filePath: string, name?: string, message?: Mess
     }
   }, [filePath, entry, message?.messageId, message?.threadId, name]);
 
-  return { state, reason, savedTo, outsideWorkspace, folder, save };
+  const outsideWorkspace = failureCode === "outside_workspace"; // Retrying can't move a file into the folder or make it smaller.
+  return { state, reason, savedTo, outsideWorkspace, retryable: state === "failed" && !outsideWorkspace && failureCode !== "file_too_large", folder, save };
 }
 
 export function saveFailureText(save: { reason: string; outsideWorkspace: boolean }): string {
@@ -488,7 +490,7 @@ export function AttachmentPreviewDialog({
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      const action = previewKeyAction(event.key, items.length);
+      const action = previewKeyAction(event.key, items.length, getComputedStyle(dialogRef.current ?? document.documentElement).direction === "rtl");
       if (action) {
         event.preventDefault();
         event.stopPropagation();
@@ -633,17 +635,17 @@ export function AttachmentPreviewDialog({
                 type="button"
                 onClick={() => navigate(-1)}
                 aria-label={t("attach.previous")}
-                className="absolute left-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white/80 backdrop-blur-sm hover:bg-black/75 hover:text-white sm:left-4"
+                className="absolute start-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white/80 backdrop-blur-sm hover:bg-black/75 hover:text-white sm:start-4"
               >
-                <ChevronLeft size={21} />
+                <ChevronLeft size={21} className="rtl:-scale-x-100" />
               </button>
               <button
                 type="button"
                 onClick={() => navigate(1)}
                 aria-label={t("attach.next")}
-                className="absolute right-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white/80 backdrop-blur-sm hover:bg-black/75 hover:text-white sm:right-4"
+                className="absolute end-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white/80 backdrop-blur-sm hover:bg-black/75 hover:text-white sm:end-4"
               >
-                <ChevronRight size={21} />
+                <ChevronRight size={21} className="rtl:-scale-x-100" />
               </button>
             </>
           )}
@@ -726,7 +728,7 @@ export function AttachmentThumbnail({
               onPreview();
             }
           }}
-          className="absolute inset-0 block size-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 aria-disabled:cursor-default"
+          className="absolute inset-0 block size-full cursor-pointer text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 aria-disabled:cursor-default"
           aria-label={t("attach.previewImageAria", { name: image.name })}
           title={t("attach.previewAria", { name: image.name })}
         >
@@ -750,7 +752,7 @@ export function AttachmentThumbnail({
               state === "ready" ? "opacity-100" : "opacity-0",
             )}
           />
-          <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/image:opacity-100 group-focus-within/image:opacity-100">
+          <span className="absolute end-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/image:opacity-100 group-focus-within/image:opacity-100">
             <Maximize2 size={13} />
           </span>
         </span>
@@ -900,7 +902,6 @@ export function AttachedFileChip({ file, message, linked = false, compact = fals
   const save = useLocalFileSave(file.path, file.name, message);
   const preview = useHtmlPreview(file.path, file.name, message);
   const failed = save.state === "failed";
-  const retryable = failed && !save.outsideWorkspace;
   if (compact) return <CompactFileChip file={file} message={message} linked={linked} save={save} preview={preview} className={className} />;
   if (!message || (!file.private && !linked)) {
     return (
@@ -919,8 +920,8 @@ export function AttachedFileChip({ file, message, linked = false, compact = fals
       <div className="flex items-center pe-1">
         <button
           type="button"
-          {...chipNameAction(preview, save, file.name, retryable)}
-          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 disabled:cursor-wait disabled:hover:bg-transparent"
+          {...chipNameAction(preview, save, file.name, save.retryable)}
+          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-start transition-colors hover:bg-raised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 disabled:cursor-wait disabled:hover:bg-transparent"
         >
           <FileText size={14} className="shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-ink">{file.name}</span>
@@ -929,12 +930,12 @@ export function AttachedFileChip({ file, message, linked = false, compact = fals
           ) : save.state === "saved" ? (
             <Check size={13} className="shrink-0 text-success" />
           ) : failed ? (
-            retryable && <RotateCcw size={13} className="shrink-0 text-danger" />
+            save.retryable && <RotateCcw size={13} className="shrink-0 text-danger" />
           ) : (
             <Download size={13} className="shrink-0" />
           )}
         </button>
-        {preview.html ? <SaveIconButton name={file.name} save={save} retryable={retryable} /> : <FilePreviewButton path={file.path} name={file.name} message={message} />}
+        {preview.html ? <SaveIconButton name={file.name} save={save} retryable={save.retryable} /> : <FilePreviewButton path={file.path} name={file.name} message={message} />}
         {preview.dialog}
       </div>
       {save.state !== "idle" && (
@@ -972,7 +973,6 @@ function CompactFileChip({ file, message, linked, save, preview, className }: {
   className?: string;
 }) {
   const failed = save.state === "failed";
-  const retryable = failed && !save.outsideWorkspace;
   const name = <span dir="auto" className="min-w-0 truncate text-ink [unicode-bidi:isolate]">{file.name}</span>;
   if (!message || (!file.private && !linked)) {
     return (
@@ -991,7 +991,7 @@ function CompactFileChip({ file, message, linked, save, preview, className }: {
       >
         <button
           type="button"
-          {...chipNameAction(preview, save, file.name, retryable)}
+          {...chipNameAction(preview, save, file.name, save.retryable)}
           className="inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full ps-2.5 pe-2 transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait"
         >
           <FileText size={14} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
@@ -1001,12 +1001,12 @@ function CompactFileChip({ file, message, linked, save, preview, className }: {
           ) : save.state === "saved" ? (
             <Check size={13} className="shrink-0 text-success" aria-hidden="true" />
           ) : failed ? (
-            retryable && <RotateCcw size={13} className="shrink-0 text-danger" aria-hidden="true" />
+            save.retryable && <RotateCcw size={13} className="shrink-0 text-danger" aria-hidden="true" />
           ) : (
             <Download size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
           )}
         </button>
-        {preview.html ? <SaveIconButton name={file.name} save={save} retryable={retryable} /> : <FilePreviewButton path={file.path} name={file.name} message={message} />}
+        {preview.html ? <SaveIconButton name={file.name} save={save} retryable={save.retryable} /> : <FilePreviewButton path={file.path} name={file.name} message={message} />}
         {preview.dialog}
       </span>
       {save.state !== "idle" && save.state !== "saved" && (

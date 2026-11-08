@@ -69,7 +69,7 @@ import { PhonePairingQr } from "./PhonePairingQr";
 import { productName } from "../lib/brand";
 
 import type { CompanionBridge, CompanionState } from "../lib/companion-types";
-export type { CompanionBridge, CompanionState, PhoneDevice } from "../lib/companion-types";
+export type { CompanionBridge, CompanionRoute, CompanionState, PhoneDevice } from "../lib/companion-types";
 
 type AccountBridge = NonNullable<NonNullable<Window["ogb"]>["companionAccount"]>;
 type StateBridge<T> = { state: () => Promise<T> };
@@ -328,7 +328,7 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
             read: () => companion.state(),
             start: () => mutateCompanionBridgeState(
               companionMutationEpoch,
-              () => companion.start(),
+              () => companion.start(routeMode === "automatic" ? undefined : []),
             ),
             refreshTailscale: () => mutateCompanionBridgeState(
               companionMutationEpoch,
@@ -841,7 +841,7 @@ function ValuePoints() {
   return (
     <div className="mt-5 grid w-full gap-2 sm:grid-cols-3">
       {points.map(({ Icon, title, detail }) => (
-        <div key={title} className="rounded-xl bg-inset px-3 py-3 text-left">
+        <div key={title} className="rounded-xl bg-inset px-3 py-3 text-start">
           <Icon size={16} className="text-accent" />
           <div className="mt-2 text-[13px] font-medium text-ink">{title}</div>
           <div className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">{detail}</div>
@@ -929,7 +929,7 @@ export function PhoneSetupFlowView({ controller }: { controller: PhoneSetupContr
             </label>
             {c.codeSent && (
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] font-medium text-ink-secondary">{t("phone.signIn.code")}</span>
+                <span className="text-[12px] font-medium text-ink-secondary">{t("phone.signIn.emailCode")}</span>
                 <input
                   autoFocus
                   autoComplete="one-time-code"
@@ -1060,7 +1060,7 @@ export function PhoneSetupFlowView({ controller }: { controller: PhoneSetupContr
       )}
       {!c.pairingExpired && manualCodeMode === "direct" && c.state?.pairing && (
         <div className="mt-4 w-full max-w-[320px] rounded-xl bg-inset px-4 py-3 text-[13px] text-ink-secondary">
-          <div>{t("phone.code.manualIntro")}</div>
+          <div>{t("phone.code.typeIntro", { app: productName() })}</div>
           <div className="mt-2 font-mono text-[22px] tracking-[0.25em] text-ink">
             {c.state.pairing.code}
           </div>
@@ -1070,7 +1070,7 @@ export function PhoneSetupFlowView({ controller }: { controller: PhoneSetupContr
         <p className="mt-3 text-[12px] text-ink-secondary">{codeUntil(c.state.pairing.expiresAt)}</p>
       )}
       {!c.pairingExpired && c.localFallback && c.state?.publicNetwork && (
-        <p role="note" className="mt-3 w-full max-w-[390px] rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-left text-[12px] leading-relaxed text-warning">
+        <p role="note" className="mt-3 w-full max-w-[390px] rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-start text-[12px] leading-relaxed text-warning">
           {t("phone.code.publicNetwork", { network: c.state.publicNetwork })}
         </p>
       )}
@@ -1080,10 +1080,10 @@ export function PhoneSetupFlowView({ controller }: { controller: PhoneSetupContr
         </button>
       )}
       {!c.pairingExpired && c.state?.pairing && (
-        <details className="mt-4 w-full max-w-[390px] rounded-lg border border-hairline/40 px-3 py-2 text-left">
+        <details className="mt-4 w-full max-w-[390px] rounded-lg border border-hairline/40 px-3 py-2 text-start">
           <summary className="cursor-pointer text-[12px] text-ink-secondary">{t("phone.code.trouble")}</summary>
           <div className="mt-3 text-[12px] text-ink-secondary">
-            {t("phone.code.manual")}
+            {t("phone.code.pairingCode")}
             <div className="mt-1 font-mono text-[22px] tracking-[0.25em] text-ink">{c.state.pairing.code}</div>
             {c.address && (
               <div className="mt-3">
