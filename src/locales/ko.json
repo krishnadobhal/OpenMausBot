@@ -7752,5 +7752,7 @@
   "settings.domain.httpsFirst": "먼저 이 주소에 HTTPS를 켠 다음 여기에서 연결하세요.",
   "settings.backTo": "설정으로 돌아가기",
   "devices.route.httpsAccount": "{app} 계정을 사용합니다.",
-  "backup.importAction": "가져오기…"
+  "backup.importAction": "가져오기…",
+  "composer.dictation.languageUnavailable": "선택한 언어에서는 음성 인식을 사용할 수 없습니다. 설정에서 다른 언어를 선택하세요.",
+  "native.talk.languageUnavailable": "선택한 언어에서는 음성 인식을 사용할 수 없습니다. 설정에서 다른 언어를 선택하세요."
 }

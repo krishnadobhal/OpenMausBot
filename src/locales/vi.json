@@ -5977,5 +5977,7 @@
   "settings.simple.billing.included": "Mức dùng kèm theo trong tháng này",
   "settings.simple.billing.summary": "{percent}% mức dùng kèm theo trong tháng này",
   "settings.simple.billing.used": "đã dùng",
-  "settings.skin.dressUp.title": "Hóa trang cho bot của tôi"
+  "settings.skin.dressUp.title": "Hóa trang cho bot của tôi",
+  "composer.dictation.languageUnavailable": "Nhận dạng giọng nói không khả dụng cho ngôn ngữ đã chọn. Hãy chọn ngôn ngữ khác trong Cài đặt.",
+  "native.talk.languageUnavailable": "Nhận dạng giọng nói không khả dụng cho ngôn ngữ đã chọn. Hãy chọn ngôn ngữ khác trong Cài đặt."
 }

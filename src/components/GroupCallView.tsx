@@ -10,6 +10,8 @@ import { normalizeState } from "@/lib/mascot";
 import { speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { pushToTalkKeys, usePushToTalk } from "@/lib/push-to-talk";
+import { speechLocale } from "@/lib/language-preference";
+import { useStoreSelector } from "@/state/store-select";
 import { useStore, type Bot, type Group, type Message } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
@@ -72,6 +74,9 @@ function questionIn(messages: Message[]): Message | undefined {
 
 function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   const { dispatch } = useStore();
+  const language = useStoreSelector((state) => state.config?.language);
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const speech = useSpeech();
   const initialPhase: Phase = group.working || group.busyBotId ? "working" : "listening";
   const [phase, setPhase] = useState<Phase>(initialPhase);
@@ -80,7 +85,7 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
   const [speakingMemberId, setSpeakingMemberId] = useState<string | null>(null);
   const pushToTalk = usePushToTalk(group.id, phase === "listening", () => {
     setNote(t("call.turns.pushToTalkFailed"));
-  });
+  }, language);
 
   const messages = group.messages;
   const approval = pendingApprovals(messages)[0];
@@ -133,7 +138,8 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
     setSpeakingMemberId(null);
     setHeard("");
     setNote(null);
-    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
+    const locale = speechLocale(languageRef.current);
+    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS, ...(locale ? { locale } : {}) }).catch(() => {
       if (alive.current && currentCall() === group.id) {
         setNote(t("call.turns.micFailed"));
       }
@@ -321,7 +327,9 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
       }
       if (code === 1) {
         setNote(
-          message ?? t(reason === "helper-build-failed"
+          message ?? t(reason === "unsupported-language" || reason === "language-unavailable"
+            ? "composer.dictation.languageUnavailable"
+            : reason === "helper-build-failed"
             ? "call.turns.helperBuildFailed"
             : reason === "dictation-disabled"
               ? "composer.dictation.disabled"

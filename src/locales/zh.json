@@ -7961,5 +7961,7 @@
   "settings.domain.httpsFirst": "请先为此地址开启 HTTPS，再在这里连接。",
   "settings.backTo": "返回设置",
   "devices.route.httpsAccount": "使用你的 {app} 账号。",
-  "backup.importAction": "导入…"
+  "backup.importAction": "导入…",
+  "composer.dictation.languageUnavailable": "所选语言暂不支持语音识别。请在设置中选择其他语言。",
+  "native.talk.languageUnavailable": "所选语言暂不支持语音识别。请在设置中选择其他语言。"
 }

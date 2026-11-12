@@ -17,6 +17,8 @@ import { speaker } from "@/lib/tts";
 import { localSystemVoiceActive } from "@/lib/local-voice";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { pushToTalkKeys, usePushToTalk } from "@/lib/push-to-talk";
+import { speechLocale } from "@/lib/language-preference";
+import { useStoreSelector } from "@/state/store-select";
 import { BotAvatar } from "./Avatar";
 import { navigateThreadMenu } from "./BotProjects";
 import { LiveKeyNeeded } from "./LiveKeyNeeded";
@@ -469,6 +471,9 @@ export function CallOverlay({ bot }: { bot: Bot }) {
 
 function Call({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
+  const language = useStoreSelector((state) => state.config?.language);
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const speech = useSpeech();
   const initialPhase: Phase = bot.busy ? "working" : "listening";
   const [phase, setPhase] = useState<Phase>(initialPhase);
@@ -476,7 +481,7 @@ function Call({ bot }: { bot: Bot }) {
   const [note, setNote] = useState<string | null>(null);
   const pushToTalk = usePushToTalk(bot.id, phase === "listening", () => {
     setNote(t("call.turns.pushToTalkFailed"));
-  });
+  }, language);
 
   const messages = visibleMessages(bot);
   const approval = pendingApprovals(messages)[0];
@@ -522,7 +527,8 @@ function Call({ bot }: { bot: Bot }) {
     move("listening");
     setHeard("");
     setNote(null);
-    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
+    const locale = speechLocale(languageRef.current);
+    void speechBridge()?.speechStart({ endpointMs: CALL_ENDPOINT_MS, ...(locale ? { locale } : {}) }).catch(() => {
       if (alive.current && currentCall() === bot.id) {
         setNote(t("call.turns.micFailed"));
       }
@@ -643,7 +649,9 @@ function Call({ bot }: { bot: Bot }) {
       }
       if (code === 1) {
         setNote(
-          message ?? t(reason === "helper-build-failed"
+          message ?? t(reason === "unsupported-language" || reason === "language-unavailable"
+            ? "composer.dictation.languageUnavailable"
+            : reason === "helper-build-failed"
             ? "call.turns.helperBuildFailed"
             : reason === "dictation-disabled"
               ? "composer.dictation.disabled"

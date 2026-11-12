@@ -37,6 +37,24 @@ test("the helper finishes when any of the chosen modifiers is let go", { skip: !
   }
 });
 
+test("native locales prefer the requested script and region without changing language", { skip: !swiftc && "needs macOS with swiftc" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "speech-helper-locale-"));
+  try {
+    const bin = join(dir, "speech-helper");
+    execFileSync("xcrun", ["swiftc", "-Onone", fileURLToPath(new URL("./resources/speech-helper.swift", import.meta.url)), "-o", bin], { timeout: 180_000 });
+    const check = (requested, supported) => JSON.parse(execFileSync(bin, ["--locale-check", requested, supported.join(",")], { encoding: "utf8", timeout: 10_000 })).locales;
+    const supported = ["zh-CN", "zh-HK", "en-US", "zh-TW"];
+    assert.equal(check("zh-TW", supported)[0], "zh-tw");
+    assert.equal(check("zh-Hant", supported)[0], "zh-hk");
+    assert.equal(check("zh", supported)[0], "zh-cn");
+    assert.equal(check("pt-BR", ["en-US", "pt-PT", "pt-BR"])[0], "pt-br");
+    assert.deepEqual(check("hi", supported), []);
+    assert.deepEqual(check("zh-Hant", supported), check("zh-Hant", [...supported].reverse()));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the helper removes an orphan session before requesting speech authorization", { skip: !swiftc && "needs macOS with swiftc" }, () => {
   const dir = mkdtempSync(join(tmpdir(), "speech-helper-owner-"));
   try {

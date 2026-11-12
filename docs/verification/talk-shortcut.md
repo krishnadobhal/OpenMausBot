@@ -112,3 +112,17 @@ or taller than the card shows a box the app never draws.
     key off there, no box makes one.
 16. **Server starting.** Quit, relaunch and press at once, before the window
     loads: "MausBot is still starting. Try again in a moment."
+17. **App recognition language.** In the disposable profile, choose Chinese in
+    Settings → Language on an English macOS installation, hold the shortcut,
+    speak a non-sensitive Chinese sentence and release. Check the Quick asks
+    transcript with a speaker who understands it. Repeat with both Chinese app
+    choices, English on a Chinese OS, Follow system and another supported
+    language. The shortcut reads the desktop's saved language choice on each
+    press; Follow system uses the desktop's system locale. A choice changed
+    during capture affects the next press. An unavailable or unsupported
+    explicitly selected native language must show a localized language error
+    rather than silently recognize English. Record the app version, macOS
+    version, app/OS language, selected recognizer locale, spoken dialect and
+    actual transcript. Do not infer dialect support or script conversion from
+    the app language label. Unit tests of argument forwarding do not qualify
+    the packaged helper, microphone, hotkey or recognition accuracy.

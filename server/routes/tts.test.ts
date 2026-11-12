@@ -63,6 +63,25 @@ describe("transcribe route", () => {
   const upload = (bytes: Buffer, type = "audio/wav") =>
     Object.assign(Readable.from([bytes]), { headers: { "content-type": type, "content-length": String(bytes.byteLength) } }) as never;
 
+  it.each(["", "zh_CN", "zh, en", "a".repeat(101), "und", ["zh", "en"]])("rejects invalid language %s before sending audio", async (language) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const req = Object.assign(Readable.from([Buffer.from("RIFF")]), { headers: { "content-type": "audio/wav", "x-omb-stt-language": language } });
+    const { answers } = await call("POST", "/api/tts/transcribe", {}, withKey, req as never);
+    expect(answers).toEqual([[400, { error: "Invalid speech input language." }]]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("maps canonical Chinese to Fish without changing its transcript", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect((init.body as FormData).get("language")).toBe("zh");
+      return new Response(JSON.stringify({ text: "  你好，世界。  " }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const req = Object.assign(Readable.from([Buffer.from("RIFF")]), { headers: { "content-type": "audio/wav", "x-omb-stt-language": "ZH-hant-tw" } });
+    expect((await call("POST", "/api/tts/transcribe", {}, withKey, req as never)).answers).toEqual([[200, { text: "你好，世界。" }]]);
+  });
+
   it("refuses anything but WAV audio", async () => {
     const { answers } = await call("POST", "/api/tts/transcribe", {}, withKey, upload(Buffer.from("x"), "application/json"));
     expect(answers).toEqual([[400, { error: "content-type must be audio/wav" }]]);

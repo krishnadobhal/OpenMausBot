@@ -3,6 +3,7 @@ import skins from "./skin-overlay.cjs";
 import { createTalkPanel } from "./talk-panel.mjs";
 import { createTalkServer } from "./talk-server.mjs";
 import { createTalkSession } from "./talk-session.mjs";
+import { shortcutSpeechLocale } from "./speech-locale.mjs";
 import { createCallPresence, createTalkShortcut, TALK_SHORTCUT_UNAVAILABLE } from "./talk-shortcut.mjs";
 
 export { isTalkPanel } from "./talk-panel.mjs";
@@ -49,7 +50,7 @@ export function installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, ap
     /** `remote()`: this desktop is a remote client of another computer. `away()`: this computer's bots moved to My Cloud,
      * so its own copy is frozen. `starting()`: this computer's server is on its way up. `dataDir()`: the data folder
      * this process runs. */
-    start({ globalShortcut, screen, prefs, remote, away, starting, localRequest, dataDir }) {
+    start({ globalShortcut, screen, prefs, remote, away, starting, localRequest, dataDir, systemLocale = () => "", defaultLanguage = () => undefined }) {
       const request = (route, init) => (packaged ? localRequest(route, init) : fetch(new URL(route, devUrl), init));
       try {
         panel = createTalkPanel({ t, BrowserWindow, screen, nativeImage, iconPath, theme, onOpen: logged("open", () => session.open()), onDismiss: logged("dismiss", () => session.dismiss()) });
@@ -59,6 +60,7 @@ export function installTalk({ ipcMain, localOnly, localOrHome, BrowserWindow, ap
           panel,
           voiceInUse: () => speech.busy() || callPresence.active(),
           release: () => shortcut.releaseModifiers(),
+          locale: () => shortcutSpeechLocale(prefs.language(), defaultLanguage(), systemLocale()),
           openChat: chat => (chat ? openLink(`openmausbot://thread/${encodeURIComponent(chat.threadId)}?bot=${encodeURIComponent(chat.botId)}`) : reveal()),
         });
         shortcut = createTalkShortcut({ globalShortcut, prefs, available: () => appleSpeech && !remote() && !away(), onPress: logged("press", () => session.press()) });

@@ -5,6 +5,7 @@ import { useStoreSelector } from "@/state/store-select";
 import { t } from "./i18n";
 import { fishSpeech } from "./fish-speech";
 import { listensHere, speechBridge } from "./speech";
+import { speechLocale } from "./language-preference";
 
 export function useComposerDictation({ draftId, text, onText }: {
   draftId: string;
@@ -12,12 +13,13 @@ export function useComposerDictation({ draftId, text, onText }: {
   onText: (text: string) => void;
 }) {
   const { capabilities } = useDesktopCapabilities();
-  const ready = listensHere(capabilities, useStoreSelector((state) => state.config));
+  const config = useStoreSelector((state) => state.config);
+  const ready = listensHere(capabilities, config);
   const [recording, setRecording] = useState(false);
   const [speechError, setSpeechError] = useState<ReactNode>(null);
   const draft = useRef({ id: draftId, text });
   draft.current = { id: draftId, text };
-  const session = useRef({ draftId: "", base: "" });
+  const session = useRef<{ draftId: string; base: string; locale?: string }>({ draftId: "", base: "" });
   const cancel = useRef<(() => void) | null>(null);
   // Fish Audio hears the clip only at its end, so stopping the mic must finish it.
   const finish = useRef<(() => void) | null>(null);
@@ -65,10 +67,11 @@ export function useComposerDictation({ draftId, text, onText }: {
       } else if (code === 1) {
         // A refused permission comes with a way to the pane that grants it.
         setSpeechError(message ?? (reason === "speech-not-authorized" ? withOpenSettings(t("composer.dictation.permission"), "speech")
-          : t(reason === "dictation-disabled" ? "composer.dictation.disabled" : "composer.dictation.failed")));
+          : t(reason === "unsupported-language" || reason === "language-unavailable" ? "composer.dictation.languageUnavailable"
+            : reason === "dictation-disabled" ? "composer.dictation.disabled" : "composer.dictation.failed")));
       }
     });
-    void bridge.speechStart().catch(() => {
+    void bridge.speechStart(session.current.locale ? { locale: session.current.locale } : undefined).catch(() => {
       if (!active) return;
       cancelSession();
       setSpeechError(t("composer.dictation.failed"));
@@ -92,7 +95,7 @@ export function useComposerDictation({ draftId, text, onText }: {
       if (finish.current) finish.current();
       else stop();
     } else {
-      session.current = { draftId, base: text };
+      session.current = { draftId, base: text, locale: speechLocale(config?.language) };
       setRecording(true);
     }
   };

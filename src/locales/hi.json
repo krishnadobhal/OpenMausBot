@@ -3627,5 +3627,7 @@
   "settings.simple.billing.included": "इस महीने का शामिल इस्तेमाल",
   "settings.simple.billing.summary": "इस महीने के शामिल इस्तेमाल का {percent}%",
   "settings.simple.billing.used": "इस्तेमाल हुआ",
-  "settings.skin.dressUp.title": "मेरे बॉट्स को सजाएँ"
+  "settings.skin.dressUp.title": "मेरे बॉट्स को सजाएँ",
+  "composer.dictation.languageUnavailable": "चुनी गई भाषा के लिए वाक् पहचान उपलब्ध नहीं है। सेटिंग में दूसरी भाषा चुनें।",
+  "native.talk.languageUnavailable": "चुनी गई भाषा के लिए वाक् पहचान उपलब्ध नहीं है। सेटिंग में दूसरी भाषा चुनें।"
 }

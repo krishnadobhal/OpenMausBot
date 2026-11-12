@@ -34,6 +34,46 @@ func fail(_ message: String) -> Never {
   exit(1)
 }
 
+func localeTag(_ locale: Locale) -> String {
+  locale.identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+}
+
+func recognitionScript(_ locale: Locale) -> String? {
+  if let script = locale.scriptCode { return script }
+  guard locale.languageCode == "zh" else { return nil }
+  return ["TW", "HK", "MO"].contains(locale.regionCode ?? "") ? "Hant" : "Hans"
+}
+
+func recognitionLocales(_ requested: Locale, supported: [Locale]) -> [Locale] {
+  let requestedTag = localeTag(requested)
+  func rank(_ candidate: Locale) -> Int {
+    if localeTag(candidate) == requestedTag { return 0 }
+    let sameScript = recognitionScript(candidate) == recognitionScript(requested)
+    let sameRegion = candidate.regionCode == requested.regionCode
+    return 1 + (sameScript ? 0 : 2) + (sameRegion ? 0 : 1)
+  }
+  return supported.filter { $0.languageCode == requested.languageCode }.sorted {
+    let left = rank($0), right = rank($1)
+    return left == right ? localeTag($0) < localeTag($1) : left < right
+  }
+}
+
+if let index = CommandLine.arguments.firstIndex(of: "--locale-check") {
+  let args = CommandLine.arguments
+  guard index + 2 < args.count else { fail("unsupported-language") }
+  let requested = Locale(identifier: args[index + 1])
+  let supported = args[index + 2].split(separator: ",").map { Locale(identifier: String($0)) }
+  emit(["locales": recognitionLocales(requested, supported: supported).map { localeTag($0) }])
+  exit(0)
+}
+
+let requestedLocale: Locale? = {
+  let args = CommandLine.arguments
+  guard let index = args.firstIndex(of: "--locale") else { return nil }
+  guard index + 1 < args.count else { fail("unsupported-language") }
+  return Locale(identifier: args[index + 1])
+}()
+
 let endpointMs: Int = {
   let args = CommandLine.arguments
   guard
@@ -202,16 +242,18 @@ final class SilenceEndpointer {
 
 SFSpeechRecognizer.requestAuthorization { status in
   guard status == .authorized else { fail("speech-not-authorized") }
-  // Recognize in the user's language: a hardcoded en-US recognizer
-  // transcribes everyone else into nonsense. First preference that has an
-  // available recognizer wins, with en-US as the last resort.
-  let candidates =
-    Locale.preferredLanguages.map { Locale(identifier: $0) }
-    + [Locale.current, Locale(identifier: "en-US")]
+  let candidates: [Locale]
+  if let requested = requestedLocale {
+    candidates = recognitionLocales(requested, supported: Array(SFSpeechRecognizer.supportedLocales()))
+    guard !candidates.isEmpty else { fail("unsupported-language") }
+  } else {
+    candidates = Locale.preferredLanguages.map { Locale(identifier: $0) }
+      + [Locale.current, Locale(identifier: "en-US")]
+  }
   guard
     let recognizer = candidates.lazy.compactMap({ SFSpeechRecognizer(locale: $0) })
       .first(where: { $0.isAvailable })
-  else { fail("recognizer-unavailable") }
+  else { fail(requestedLocale == nil ? "recognizer-unavailable" : "language-unavailable") }
 
   let request = SFSpeechAudioBufferRecognitionRequest()
   request.shouldReportPartialResults = true

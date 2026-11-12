@@ -7097,5 +7097,7 @@
   "backup.excluded": "Le credenziali degli account salvate e le connessioni non sono incluse. Ricollega i tuoi account sul nuovo computer; le credenziali già presenti lì non cambiano. Non sono inclusi nemmeno gli accessi ad altre app AI e i dischi dei desktop remoti.",
   "settings.simple.billing.included": "Uso incluso di questo mese",
   "settings.simple.billing.summary": "{percent}% dell'uso incluso di questo mese",
-  "settings.simple.billing.used": "usato"
+  "settings.simple.billing.used": "usato",
+  "composer.dictation.languageUnavailable": "Il riconoscimento vocale non è disponibile per la lingua selezionata. Scegli un’altra lingua nelle Impostazioni.",
+  "native.talk.languageUnavailable": "Il riconoscimento vocale non è disponibile per la lingua selezionata. Scegli un’altra lingua nelle Impostazioni."
 }

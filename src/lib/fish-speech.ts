@@ -1,6 +1,7 @@
 // Take turns and dictation where the Mac's speech helper does not exist: the page records the mic, trims silence, and
 // the harness sends each clip to Fish Audio. It speaks the same five-method contract as window.ogb's speech bridge.
 import { api, ApiError } from "@/state/api";
+import { canonicalSpeechLocale, STT_LANGUAGE_HEADER } from "../../shared/stt-language";
 import { t } from "./i18n";
 
 export type SpeechBridge = Required<
@@ -102,7 +103,7 @@ type Mic = { stream: MediaStream; context: AudioContext; source: MediaStreamAudi
 type Session =
   | { phase: "idle" }
   | { phase: "opening" }
-  | { phase: "listening"; mic: Mic; clip: ReturnType<typeof createClip> }
+  | { phase: "listening"; mic: Mic; clip: ReturnType<typeof createClip>; locale?: string }
   | { phase: "transcribing"; abort: AbortController };
 
 const transcriptListeners = new Set<(line: Line) => void>();
@@ -137,12 +138,12 @@ function micFailure(error: unknown): End {
   return { code: 1, reason: "microphone-failed" };
 }
 
-async function upload(gen: number, frames: Float32Array[], abort: AbortController) {
+async function upload(gen: number, frames: Float32Array[], abort: AbortController, locale: string | undefined) {
   try {
     const { text } = await api<{ text?: string }>("/api/tts/transcribe", {
       method: "POST",
       body: encodeWav(frames),
-      headers: { "content-type": "audio/wav" },
+      headers: { "content-type": "audio/wav", ...(locale ? { [STT_LANGUAGE_HEADER]: locale } : {}) },
       signal: abort.signal,
       timeoutMs: UPLOAD_TIMEOUT_MS,
     });
@@ -160,7 +161,7 @@ async function upload(gen: number, frames: Float32Array[], abort: AbortControlle
 
 function finishCapture(gen: number) {
   if (gen !== generation || session.phase !== "listening") return;
-  const { mic, clip } = session;
+  const { mic, clip, locale } = session;
   release(mic);
   if (!clip.spoke) {
     session = { phase: "idle" };
@@ -168,11 +169,12 @@ function finishCapture(gen: number) {
   }
   const abort = new AbortController();
   session = { phase: "transcribing", abort };
-  void upload(gen, clip.frames(), abort);
+  void upload(gen, clip.frames(), abort, locale);
 }
 
 export const fishSpeech: SpeechBridge = {
   async speechStart(options) {
+    const locale = canonicalSpeechLocale(options?.locale);
     teardown();
     const gen = generation;
     session = { phase: "opening" };
@@ -210,7 +212,7 @@ export const fishSpeech: SpeechBridge = {
     mic.source.connect(mic.processor);
     mic.processor.connect(mic.context.destination);
     void mic.context.resume().catch(() => {});
-    session = { phase: "listening", mic, clip };
+    session = { phase: "listening", mic, clip, locale };
   },
   async speechStop() {
     teardown();

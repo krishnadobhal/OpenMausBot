@@ -5977,5 +5977,7 @@
   "settings.simple.billing.included": "Bu ayın dahil kullanımı",
   "settings.simple.billing.summary": "Bu ayın dahil kullanımının %{percent} kadarı",
   "settings.simple.billing.used": "kullanıldı",
-  "settings.skin.dressUp.title": "Botlarımı giydir"
+  "settings.skin.dressUp.title": "Botlarımı giydir",
+  "composer.dictation.languageUnavailable": "Seçilen dil için konuşma tanıma kullanılamıyor. Ayarlardan başka bir dil seçin.",
+  "native.talk.languageUnavailable": "Seçilen dil için konuşma tanıma kullanılamıyor. Ayarlardan başka bir dil seçin."
 }

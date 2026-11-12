@@ -7238,5 +7238,7 @@
   "backup.excluded": "Zapisane dane logowania do kont i połączenia nie są uwzględnione. Połącz konta ponownie na nowym komputerze; istniejące dane logowania w miejscu docelowym się nie zmienią. Nie są też uwzględnione logowania do innych aplikacji AI ani dyski zdalnych pulpitów.",
   "settings.simple.billing.included": "Uwzględnione użycie w tym miesiącu",
   "settings.simple.billing.summary": "{percent}% uwzględnionego użycia w tym miesiącu",
-  "settings.simple.billing.used": "użyto"
+  "settings.simple.billing.used": "użyto",
+  "composer.dictation.languageUnavailable": "Rozpoznawanie mowy nie jest dostępne dla wybranego języka. Wybierz inny język w ustawieniach.",
+  "native.talk.languageUnavailable": "Rozpoznawanie mowy nie jest dostępne dla wybranego języka. Wybierz inny język w ustawieniach."
 }

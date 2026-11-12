@@ -10569,5 +10569,7 @@
   "settings.domain.httpsFirst": "Ative o HTTPS neste endereço primeiro e depois conecte-o aqui.",
   "settings.backTo": "Voltar às Configurações",
   "devices.route.httpsAccount": "Usa sua conta do {app}.",
-  "backup.importAction": "Importar…"
+  "backup.importAction": "Importar…",
+  "composer.dictation.languageUnavailable": "O reconhecimento de fala não está disponível para o idioma selecionado. Escolha outro idioma nas Configurações.",
+  "native.talk.languageUnavailable": "O reconhecimento de fala não está disponível para o idioma selecionado. Escolha outro idioma nas Configurações."
 }

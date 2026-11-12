@@ -49,6 +49,21 @@ afterEach(() => {
 });
 
 describe("app language preference", () => {
+  it("resolves speech from this device's choice, inherited default and device language", async () => {
+    const preference = await import("./language-preference");
+    expect(preference.speechLocale("zh-tw", "en-US")).toBe("zh-TW");
+    preference.setLanguageChoice("ja");
+    expect(preference.speechLocale("zh-tw", "en-US")).toBe("ja");
+    preference.setLanguageChoice("");
+    expect(preference.speechLocale("zh-tw", "pt-br")).toBe("pt-BR");
+    vi.stubGlobal("navigator", {});
+    expect(preference.speechLocale("zh-tw")).toBeUndefined();
+  });
+
+  it("preserves a system speech language without an app translation pack", async () => {
+    const preference = await import("./language-preference");
+    expect(preference.speechLocale(undefined, "ar-EG")).toBe("ar-EG");
+  });
   it("uses the server's language until this device picks one", async () => {
     const preference = await import("./language-preference");
     expect(preference.useLanguageChoice()).toBeNull();

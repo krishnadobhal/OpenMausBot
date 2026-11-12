@@ -4049,5 +4049,7 @@
   "settings.simple.billing.included": "Включене використання цього місяця",
   "settings.simple.billing.summary": "{percent}% включеного використання цього місяця",
   "settings.simple.billing.used": "використано",
-  "settings.skin.dressUp.title": "Перевдягнути моїх ботів"
+  "settings.skin.dressUp.title": "Перевдягнути моїх ботів",
+  "composer.dictation.languageUnavailable": "Розпізнавання мовлення недоступне для вибраної мови. Виберіть іншу мову в налаштуваннях.",
+  "native.talk.languageUnavailable": "Розпізнавання мовлення недоступне для вибраної мови. Виберіть іншу мову в налаштуваннях."
 }

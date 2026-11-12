@@ -3773,5 +3773,7 @@
   "settings.simple.billing.included": "Utilisation incluse ce mois-ci",
   "settings.simple.billing.summary": "{percent} % de l'utilisation incluse ce mois-ci",
   "settings.simple.billing.used": "utilisé",
-  "settings.skin.dressUp.title": "Déguiser mes bots"
+  "settings.skin.dressUp.title": "Déguiser mes bots",
+  "composer.dictation.languageUnavailable": "La reconnaissance vocale n’est pas disponible pour la langue sélectionnée. Choisissez une autre langue dans les paramètres.",
+  "native.talk.languageUnavailable": "La reconnaissance vocale n’est pas disponible pour la langue sélectionnée. Choisissez une autre langue dans les paramètres."
 }

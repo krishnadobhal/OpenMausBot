@@ -12,6 +12,7 @@ export const TALK_TEXT = Object.freeze({
   permission: "Talking needs Microphone + Speech Recognition access — System Settings → Privacy & Security.",
   dictationOff: "Turn on Dictation in System Settings → Keyboard, then try again.",
   unavailable: "Talking couldn't start. Try again.",
+  languageUnavailable: "Speech recognition isn't available for the selected language. Choose another language in Settings.",
   failed: "MausBot couldn't take that · Open chat",
 });
 
@@ -19,6 +20,8 @@ const SPEECH_PROBLEMS = new Map([
   ["speech-not-authorized", TALK_TEXT.permission],
   ["mic-failed", TALK_TEXT.unavailable],
   ["recognizer-unavailable", TALK_TEXT.unavailable],
+  ["unsupported-language", TALK_TEXT.languageUnavailable],
+  ["language-unavailable", TALK_TEXT.languageUnavailable],
   ["dictation-disabled", TALK_TEXT.dictationOff],
   ["helper-build-failed", TALK_TEXT.unavailable],
   ["helper-start-failed", TALK_TEXT.unavailable],
@@ -33,11 +36,11 @@ const SERVER_NOTICES = new Map([
 ]);
 
 const SERVER_NOTICE_KEYS = new Map([["server-down", "native.talk.openMausBot"], ["starting", "native.talk.starting"], ["no-mausbot", "native.talk.setUpFirst"], ["moved", "native.talk.movedToCloud"]]);
-const SPEECH_KEYS = new Map([["speech-not-authorized", "native.talk.permissions"], ["mic-failed", "native.talk.unavailable"], ["recognizer-unavailable", "native.talk.unavailable"], ["dictation-disabled", "native.talk.dictationOff"], ["helper-build-failed", "native.talk.unavailable"], ["helper-start-failed", "native.talk.unavailable"], ["unsupported-platform", "native.talk.unavailable"]]);
+const SPEECH_KEYS = new Map([["speech-not-authorized", "native.talk.permissions"], ["mic-failed", "native.talk.unavailable"], ["recognizer-unavailable", "native.talk.unavailable"], ["unsupported-language", "native.talk.languageUnavailable"], ["language-unavailable", "native.talk.languageUnavailable"], ["dictation-disabled", "native.talk.dictationOff"], ["helper-build-failed", "native.talk.unavailable"], ["helper-start-failed", "native.talk.unavailable"], ["unsupported-platform", "native.talk.unavailable"]]);
 
 const UNDER_WAY = new Set(["listening", "sending", "thinking"]);
 
-export function createTalkSession({ speech, server, panel, voiceInUse, release, openChat, newSendId = randomUUID }) {
+export function createTalkSession({ speech, server, panel, voiceInUse, release, openChat, locale = () => undefined, newSendId = randomUUID }) {
   let current = null;
 
   const live = ask => current === ask && !ask.controller.signal.aborted;
@@ -167,7 +170,8 @@ export function createTalkSession({ speech, server, panel, voiceInUse, release, 
       failed(ask, error);
     });
     try {
-      speech.start(ask.sink, { finishOnRelease: release() });
+      const language = locale();
+      speech.start(ask.sink, { finishOnRelease: release(), ...(language ? { locale: language } : {}) });
     } catch {
       if (!listening()) return;
       speech.stop(ask.sink);

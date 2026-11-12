@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { createSpeechTranscript } from "./speech-transcript.mjs";
+import { speechLocaleArguments } from "./speech-locale.mjs";
 
 import {
   buildSpeechHelper,
@@ -94,7 +95,14 @@ export function startSpeech(target, options = {}) {
   const endpointMs = Number.isFinite(requested) && requested > 0
     ? Math.min(5_000, Math.max(250, Math.round(requested)))
     : 0;
-  const args = endpointMs ? ["--endpoint-ms", String(endpointMs)] : [];
+  let args;
+  try {
+    args = speechLocaleArguments(options?.locale);
+  } catch {
+    sink.end({ code: 1, reason: "unsupported-language" });
+    return;
+  }
+  if (endpointMs) args.push("--endpoint-ms", String(endpointMs));
   const release = [...new Set(Array.isArray(options?.finishOnRelease) ? options.finishOnRelease : [])]
     .filter((name) => RELEASE_MODIFIERS.includes(name));
   if (release.length) args.push("--finish-on-release", release.join(","));

@@ -25,7 +25,7 @@ const start = (target, options) => new Promise(resolve => {
   fixture.onLaunch = resolve;
   startSpeech(target, options);
 });
-const launch = async () => {
+const launch = async (options) => {
   const events = [];
   let destroyed = false;
   const contents = Object.assign(new EventEmitter(), { send: (channel, body) => events.push({ channel, body }) });
@@ -33,7 +33,7 @@ const launch = async () => {
   // Electron: a destroyed BrowserWindow throws "Object has been destroyed" when its webContents is read.
   Object.defineProperty(win, "webContents", { get: () => { if (destroyed) throw new TypeError("Object has been destroyed"); return contents; } });
   const close = () => { destroyed = true; win.emit("closed"); };
-  await start(win);
+  await start(win, options);
   return { ...fixture.launches.at(-1), events, win, contents, close };
 };
 const pageListeners = session => PAGE_GONE.map(event => session.contents.listenerCount(event));
@@ -50,6 +50,12 @@ afterEach(() => {
 });
 
 describe.skipIf(platform === "win32")("native speech file transport", () => {
+  it("passes the canonical speech locale alongside endpoint timing", async () => {
+    const session = await launch({ locale: "zh-hant-tw", endpointMs: 850 });
+    const args = session.args.slice(session.args.indexOf("--args") + 1);
+    expect(args.slice(0, 4)).toEqual(["--locale", "zh-Hant-TW", "--endpoint-ms", "850"]);
+  });
+
   it("assembles utterances before delivering them and keeps partials partial for calls", async () => {
     const session = await launch();
     emit(session, { text: "最初の文章。", partial: true, utteranceFinal: true, speechStart: 0 });

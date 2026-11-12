@@ -8069,5 +8069,7 @@
   "settings.domain.httpsFirst": "まずこのアドレスで HTTPS を有効にしてから、ここで接続します。",
   "settings.backTo": "設定に戻る",
   "devices.route.httpsAccount": "{app} アカウントを使います。",
-  "backup.importAction": "インポート…"
+  "backup.importAction": "インポート…",
+  "composer.dictation.languageUnavailable": "選択した言語では音声認識を利用できません。設定で別の言語を選択してください。",
+  "native.talk.languageUnavailable": "選択した言語では音声認識を利用できません。設定で別の言語を選択してください。"
 }

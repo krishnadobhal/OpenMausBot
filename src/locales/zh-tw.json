@@ -10257,5 +10257,7 @@
   "settings.domain.httpsFirst": "請先為這個網址開啟 HTTPS，再到這裡連接。",
   "settings.backTo": "返回設定",
   "devices.route.httpsAccount": "使用你的 {app} 帳號。",
-  "backup.importAction": "匯入…"
+  "backup.importAction": "匯入…",
+  "composer.dictation.languageUnavailable": "所選語言暫不支援語音辨識。請在設定中選擇其他語言。",
+  "native.talk.languageUnavailable": "所選語言暫不支援語音辨識。請在設定中選擇其他語言。"
 }

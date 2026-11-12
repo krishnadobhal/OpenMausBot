@@ -10,7 +10,7 @@ test.beforeEach(() => mock.timers.enable({ apis: ["setTimeout"] }));
 test.afterEach(() => mock.timers.reset());
 
 const CHAT = { botId: "m", threadId: "t1" };
-function harness({ busy = false, prepare = async () => CHAT, ask } = {}) {
+function harness({ busy = false, prepare = async () => CHAT, ask, locale } = {}) {
   const h = { views: [], closed: 0, hovered: false, renderFails: false, closeFails: false, hoverFails: false, startFails: false, releaseFails: false, starts: [], stops: [], finishes: [], opened: [], asks: [], prepares: 0, sink: null };
   h.session = createTalkSession({
     speech: {
@@ -27,7 +27,7 @@ function harness({ busy = false, prepare = async () => CHAT, ask } = {}) {
       close: () => { h.closed += 1; if (h.closeFails) throw new Error("close failed"); },
       hovered: () => { if (h.hoverFails) throw new Error("hovered failed"); return h.hovered; },
     },
-    voiceInUse: () => busy,
+    voiceInUse: () => busy, locale,
     release: () => { if (h.releaseFails) throw new Error("no key"); return ["control", "option"]; },
     openChat: chat => h.opened.push(chat), newSendId: () => "send-1",
   });
@@ -56,6 +56,7 @@ test("the box's words and timings are fixed", () => {
     permission: "Talking needs Microphone + Speech Recognition access — System Settings → Privacy & Security.",
     dictationOff: "Turn on Dictation in System Settings → Keyboard, then try again.",
     unavailable: "Talking couldn't start. Try again.",
+    languageUnavailable: "Speech recognition isn't available for the selected language. Choose another language in Settings.",
     failed: "MausBot couldn't take that · Open chat",
   });
   assert.ok(Object.isFrozen(TALK_TIMING));
@@ -67,6 +68,22 @@ test("a press listens with the key's release modifiers and shows the live words"
   assert.deepEqual(h.starts, [{ finishOnRelease: ["control", "option"] }]);
   assert.deepEqual(h.views, [{ state: "listening", text: "" }, { state: "listening", text: "what's on" }]);
   assert.equal(h.prepares, 1);
+});
+
+test("each shortcut press captures its language and unavailable recognition is actionable", () => {
+  let language = "zh-TW";
+  const h = harness({ locale: () => language });
+  h.session.press();
+  assert.equal(h.starts[0].locale, "zh-TW");
+  language = "ja";
+  assert.equal(h.starts[0].locale, "zh-TW");
+  release(h, { code: 1, reason: "unsupported-language" });
+  assert.equal(h.views.at(-1).textCode, "native.talk.languageUnavailable");
+  assert.equal(h.views.at(-1).text, TALK_TEXT.languageUnavailable);
+  h.session.press();
+  assert.equal(h.starts[1].locale, "ja");
+  release(h, { code: 1, reason: "language-unavailable" });
+  assert.equal(h.views.at(-1).textCode, "native.talk.languageUnavailable");
 });
 
 test("letting go sends the words to the Quick asks chat and shows the reply, which hides 12 s later", async () => {

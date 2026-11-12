@@ -11,6 +11,13 @@ function stubFetch(status: number, body: unknown) {
 }
 
 describe("Fish Audio transcribe", () => {
+  it.each([["zh-Hant-TW", "zh"], ["hi-IN", "hi"], ["pt-BR", "pt"], ["yue-HK", null], [undefined, null]])("maps the %s hint without translating the transcript", async (locale, language) => {
+    const fetchMock = stubFetch(200, { text: "  你好，世界。  " });
+    expect(await transcribe(new Uint8Array([1, 2, 3]), "audio/wav", "fish-key", locale)).toBe("你好，世界。");
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect((init.body as FormData).get("language")).toBe(language);
+  });
+
   it("sends the clip with the pro model and returns the trimmed text", async () => {
     const fetchMock = stubFetch(200, { text: "  hello there  ", duration: 1.2 });
     expect(await transcribe(new Uint8Array([1, 2, 3]), "audio/wav", "fish-key")).toBe("hello there");

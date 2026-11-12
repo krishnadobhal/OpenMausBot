@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { loadLocale } from "@/lib/i18n";
+import { canonicalSpeechLocale } from "../../shared/stt-language";
 
 export const LANGUAGE_KEY = "omb-language";
 
@@ -53,6 +54,10 @@ export function localeTag(language: string, system: string | undefined = globalT
 
 export function startupLocaleTag(system: string | undefined = globalThis.navigator?.language): string | undefined {
   return localeTag(effectiveLanguage(languageChoice(), undefined), system);
+}
+
+export function speechLocale(serverDefault?: string, system: string | undefined = globalThis.navigator?.language): string | undefined {
+  return canonicalSpeechLocale(localeTag(effectiveLanguage(languageChoice(), serverDefault), system));
 }
 
 function notify() {

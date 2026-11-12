@@ -155,6 +155,27 @@ describe("Fish Audio listener", () => {
     expect(contextsClosed).toBe(1);
   });
 
+  it("captures the language before microphone permission and preserves Chinese text", async () => {
+    let grant!: (value: ReturnType<typeof stream>) => void;
+    getUserMedia.mockImplementationOnce(() => new Promise((resolve) => { grant = resolve; }));
+    const options = { locale: "zh-hant-tw" };
+    const started = fishSpeech.speechStart(options);
+    options.locale = "hi";
+    grant(stream());
+    await started;
+    sent.api.mockResolvedValue({ text: "你好，世界。" });
+    feed(loud, 5);
+    await fishSpeech.speechFinish();
+    await settle();
+    expect(sent.api.mock.calls[0]![1].headers).toEqual({ "content-type": "audio/wav", "x-omb-stt-language": "zh-Hant-TW" });
+    expect(lines).toEqual([{ partial: false, text: "你好，世界。" }]);
+    await fishSpeech.speechStart(options);
+    feed(loud, 5);
+    await fishSpeech.speechFinish();
+    await settle();
+    expect(sent.api.mock.calls[1]![1].headers).toEqual({ "content-type": "audio/wav", "x-omb-stt-language": "hi" });
+  });
+
   it("ends a turn that heard no speech without sending anything", async () => {
     await fishSpeech.speechStart({ endpointMs: 850 });
     feed(quiet, 20);

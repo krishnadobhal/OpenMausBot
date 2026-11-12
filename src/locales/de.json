@@ -3936,5 +3936,7 @@
   "settings.simple.billing.included": "Inklusive Nutzung in diesem Monat",
   "settings.simple.billing.summary": "{percent} % der inklusiven Nutzung in diesem Monat",
   "settings.simple.billing.used": "genutzt",
-  "settings.skin.dressUp.title": "Meine Bots verkleiden"
+  "settings.skin.dressUp.title": "Meine Bots verkleiden",
+  "composer.dictation.languageUnavailable": "Spracherkennung ist für die ausgewählte Sprache nicht verfügbar. Wähle in den Einstellungen eine andere Sprache.",
+  "native.talk.languageUnavailable": "Spracherkennung ist für die ausgewählte Sprache nicht verfügbar. Wähle in den Einstellungen eine andere Sprache."
 }

@@ -53,6 +53,7 @@ describe("composer dictation through Fish Audio", () => {
   afterEach(() => {
     flushSync(() => root.unmount());
     cacheDesktopCapabilities(initialDesktopCapabilities());
+    localStorage.removeItem("omb-language");
   });
 
   const toggle = () => flushSync(() => dictation.toggle());
@@ -83,6 +84,23 @@ describe("composer dictation through Fish Audio", () => {
     toggle();
     flushSync(() => fish.listeners.end!({ code: 1, reason: "microphone-blocked", message: t("call.live.micBlocked") }));
     expect(dictation.speechError).toBe(t("call.live.micBlocked"));
+  });
+
+  it("uses the selected language for each recording without restarting one in progress", () => {
+    localStorage.setItem("omb-language", "zh-tw");
+    toggle();
+    expect(fish.speechStart).toHaveBeenLastCalledWith({ locale: "zh-TW" });
+    localStorage.setItem("omb-language", "hi");
+    expect(fish.speechStart).toHaveBeenCalledOnce();
+    flushSync(() => fish.listeners.end!({ code: 0, reason: "completed" }));
+    toggle();
+    expect(fish.speechStart).toHaveBeenLastCalledWith({ locale: "hi" });
+  });
+
+  it.each(["unsupported-language", "language-unavailable"])("shows a localized error for %s", (reason) => {
+    toggle();
+    flushSync(() => fish.listeners.end!({ code: 1, reason }));
+    expect(dictation.speechError).toBe(t("composer.dictation.languageUnavailable"));
   });
 
   it("is not ready without a saved Fish Audio key", () => {

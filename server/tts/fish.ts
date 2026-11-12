@@ -1,6 +1,7 @@
 // The API key stays on the harness: the renderer gets only voice metadata and audio bytes.
 import type { FishTtsModel } from "../config.ts";
 import { userErrorThrown } from "../user-errors.ts";
+import { transcriptionLanguage } from "../../shared/stt-language.ts";
 
 const API = (process.env.OMB_FISH_AUDIO_API || "https://api.fish.audio").replace(/\/+$/, "");
 export const DEFAULT_FISH_MODEL: FishTtsModel = "s2.1-pro";
@@ -209,12 +210,14 @@ export async function synthesize(
   return { bytes: new Uint8Array(await res.arrayBuffer()), mime: "audio/mpeg" };
 }
 
-export async function transcribe(audio: Uint8Array, mime: string, key: string): Promise<string> {
+export async function transcribe(audio: Uint8Array, mime: string, key: string, locale?: string): Promise<string> {
   const form = new FormData();
   form.append("audio", new Blob([audio as Uint8Array<ArrayBuffer>], { type: mime }), "speech.wav");
   form.append("ignore_timestamps", "true");
   form.append("diarize", "false");
   form.append("tag_audio_events", "false");
+  const language = transcriptionLanguage(locale);
+  if (language) form.append("language", language);
   let res: Response;
   try {
     res = await fetch(`${API}/v1/asr`, {

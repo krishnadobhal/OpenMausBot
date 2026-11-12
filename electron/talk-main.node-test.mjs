@@ -66,9 +66,9 @@ function harness({ packaged = true, appleSpeech = true, remote = false, register
     unregister: accelerator => { h.registered.delete(accelerator); },
   };
   const screen = { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 25, width: 1440, height: 875 } }) };
-  h.start = () => h.talk.start({ globalShortcut, screen, prefs: createDesktopPrefs({ read: () => null, write: () => {} }), remote: () => remote,
+  h.start = (language = {}) => h.talk.start({ globalShortcut, screen, prefs: createDesktopPrefs({ read: () => null, write: () => {} }), remote: () => remote,
     away: failing("away", () => h.away), starting: () => h.starting,
-    localRequest: route => { h.requests.push(["local", route]); return answer(route); }, dataDir: () => "/Users/a/.openmausbot" });
+    localRequest: route => { h.requests.push(["local", route]); return answer(route); }, dataDir: () => "/Users/a/.openmausbot", ...language });
   h.handle = (channel, event, ...args) => h.handlers.get(channel)(event, ...args);
   h.press = () => h.registered.get("Control+Alt+Space")();
   h.page = name => new FakeBrowserWindow({ name });
@@ -88,7 +88,7 @@ test("every list of the app's windows leaves the talk box out", () => {
 test("main hands the talk wiring its speech sinks, this computer's own server and window, and closes it first on quit", () => {
   assert.match(main, /const talk = installTalk\(\{ ipcMain, localOnly, localOrHome, BrowserWindow, appleSpeech: nativeActions\.appleSpeech,\s*speech: \{ start: startSpeech, stop: stopSpeech, finish: finishSpeech, busy: speechBusy \},/);
   assert.match(main, /packaged: app\.isPackaged, devUrl: DEV_URL, nativeImage, iconPath: APP_ICON, openLink: queueChatLink, reveal: revealForLink, log: slog, t: nativeT \}\);/);
-  assert.match(main, /talk\.start\(\{ globalShortcut, screen, prefs: desktopPrefs, remote: \(\) => Boolean\(desktopRemoteAccess\), away: \(\) => homeWindow\.current\(\)\.kind !== "computer", starting: \(\) => !serverReady, localRequest: localServerRequest, dataDir: \(\) => runningDataDir \}\);/);
+  assert.match(main, /talk\.start\(\{ globalShortcut, screen, prefs: desktopPrefs, remote: \(\) => Boolean\(desktopRemoteAccess\), away: \(\) => homeWindow\.current\(\)\.kind !== "computer", starting: \(\) => !serverReady, localRequest: localServerRequest, dataDir: \(\) => runningDataDir, systemLocale: \(\) => app\.getLocale\(\), defaultLanguage:/);
   assert.match(main, /app\.on\("before-quit", \(e\) => \{\s*talk\.close\(\);/);
   assert.doesNotMatch(main, /ipcMain\.handle\("(?:speech|talk-shortcut|call):/);
 });
@@ -179,6 +179,19 @@ test("a press listens until the key's modifiers are let go, and asks this comput
   dev.press();
   assert.deepEqual(dev.requests, [["dev", "http://127.0.0.1:5199/api/bots?messages=0"]]);
   dev.talk.close();
+});
+
+test("shortcut recordings use the saved app language and Follow system overrides inherited defaults", () => {
+  const prefs = createDesktopPrefs({ read: () => ({ language: "zh-tw" }), write: () => {} });
+  const h = harness();
+  h.start({ prefs, systemLocale: () => "ja-JP", defaultLanguage: () => "en" });
+  h.press();
+  assert.equal(h.started[0][1].locale, "zh-TW");
+  h.started[0][0].end({ code: 0, reason: "completed" });
+  prefs.setLanguage("");
+  h.press();
+  assert.equal(h.started[1][1].locale, "ja-JP");
+  h.talk.close();
 });
 
 test("a call or composer dictation holding the microphone keeps a press from listening", () => {

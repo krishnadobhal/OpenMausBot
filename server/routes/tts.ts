@@ -8,6 +8,7 @@ import * as tts from "../tts/index.ts";
 import { toUtterances, VOICE_FIRST_BLOCK_MAX_CHARS } from "../tts/speech-text.ts";
 import { userError, userErrorFields } from "../user-errors.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { canonicalSpeechLocale, STT_LANGUAGE_HEADER } from "../../shared/stt-language.ts";
 
 /** About six minutes of 16 kHz mono 16-bit PCM. */
 export const TRANSCRIBE_MAX_BYTES = 12 * 1024 * 1024;
@@ -83,6 +84,12 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       }
     }
     if (method === "POST" && path === "/api/tts/transcribe") {
+      const suppliedLocale = req.headers[STT_LANGUAGE_HEADER];
+      const locale = canonicalSpeechLocale(suppliedLocale);
+      if (suppliedLocale !== undefined && !locale) {
+        req.resume();
+        return json(res, 400, { error: "Invalid speech input language." });
+      }
       const rawType = req.headers["content-type"];
       const mime = (Array.isArray(rawType) ? rawType[0] : rawType)?.split(";")[0]?.trim().toLowerCase();
       if (mime !== "audio/wav") {
@@ -112,7 +119,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       });
       if (!audio) return json(res, 413, { error: `audio exceeds ${TRANSCRIBE_MAX_BYTES} bytes` });
       try {
-        return json(res, 200, { text: await fish.transcribe(audio, mime, key) });
+        return json(res, 200, { text: await fish.transcribe(audio, mime, key, locale) });
       } catch (e) {
         return json(res, 502, { error: e instanceof Error ? e.message : String(e), ...userErrorFields(e) });
       }

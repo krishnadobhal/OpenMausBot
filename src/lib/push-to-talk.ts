@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { currentCall } from "./call";
 import { isMacPlatform } from "./keyboard-shortcuts";
 import { speechBridge } from "./speech";
+import { speechLocale } from "./language-preference";
 
 type ModifierEvent = Pick<KeyboardEvent, "altKey" | "ctrlKey" | "code" | "repeat">;
 
@@ -17,11 +18,13 @@ export function isPushToTalkPress(event: ModifierEvent): boolean {
   return modifier && event.altKey && event.ctrlKey && !event.repeat;
 }
 
-export function usePushToTalk(targetId: string, enabled: boolean, onError: () => void): boolean {
+export function usePushToTalk(targetId: string, enabled: boolean, onError: () => void, language?: string): boolean {
   const [active, setActive] = useState(false);
   const held = useRef(false);
   const enabledRef = useRef(enabled);
   const onErrorRef = useRef(onError);
+  const languageRef = useRef(language);
+  languageRef.current = language;
   enabledRef.current = enabled;
   onErrorRef.current = onError;
 
@@ -53,7 +56,8 @@ export function usePushToTalk(targetId: string, enabled: boolean, onError: () =>
       event.preventDefault();
       held.current = true;
       setActive(true);
-      void bridge.speechStart().catch(() => {
+      const locale = speechLocale(languageRef.current);
+      void bridge.speechStart(locale ? { locale } : undefined).catch(() => {
         held.current = false;
         setActive(false);
         onErrorRef.current();
