@@ -1,4 +1,6 @@
 {
+  "settings.peerExchanges.title": "Show bot-to-bot exchanges inline",
+  "settings.peerExchanges.subtitle": "Show full requests and replies in chat instead of compact rows.",
   "connectedWorkspaces.localTitle": "Environments on this computer",
   "connectedWorkspaces.missing": "missing",
   "connectedWorkspaces.current": "Current",

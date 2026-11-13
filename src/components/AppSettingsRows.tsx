@@ -19,6 +19,7 @@ import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { setPinnedCircles, setUniversalPins, usePinnedCircles, useUniversalPins } from "@/lib/sidebar-preferences";
 import { setShowRunCard, useShowRunCard } from "@/lib/run-card-preferences";
+import { setInlinePeerExchanges, useInlinePeerExchanges } from "@/lib/peer-exchange-preference";
 import { parseSendKey, SEND_KEYS, sendKeyLabel, setSendKey, useSendKey } from "@/lib/send-key";
 import { alternateSendLabel, parseFollowUpDefault, setFollowUpDefault, useFollowUpDefault } from "@/lib/follow-up";
 import { effectiveLanguage, setLanguageChoice, useLanguageChoice } from "@/lib/language-preference";
@@ -330,6 +331,13 @@ export function RunCardRow() {
       />
     </SettingRow>
   );
+}
+
+export function InlinePeerExchangesRow() {
+  const enabled = useInlinePeerExchanges();
+  return <SettingRow title={t("settings.peerExchanges.title")} subtitle={t("settings.peerExchanges.subtitle")}>
+    <Switch checked={enabled} aria-label={t("settings.peerExchanges.title")} onClick={() => setInlinePeerExchanges(!enabled)} />
+  </SettingRow>;
 }
 
 export function UniversalPinsRow() {

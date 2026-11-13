@@ -50,7 +50,7 @@ const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBin
     const lead = (await api("/api/bots", { name: "Engineer", title: "Implementation", section: "" })).bot;
     const gateFile = join(temporary, "finish-teammate");
     writeFileSync(planPath, JSON.stringify({
-      [info.botId]: { steps: [{ arguments: { bot_ids: [lead.id], request_key: "review", message: "Check the fixture CSV export" } }], reply: "Assigned", resumeReply: "Engineer checked the fixture CSV export" },
+      [info.botId]: { steps: [{ arguments: { bot_ids: [lead.id], request_key: "review", message: "Check the fixture CSV export\n\nDetailed delivery instructions for the teammate." } }], reply: "Assigned", resumeReply: "Engineer checked the fixture CSV export" },
       [lead.id]: { gateFile, reply: "CSV export checked in my separate task" },
     }));
     await ui("flag", "--set", "features.showToolCalls=false");
@@ -75,8 +75,17 @@ const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBin
     await ui("screenshot", "--out", screenshot);
     await click("Sent to Engineer");
     await expect.poll(snapshot, { timeout: 15_000 }).toContain("CSV export checked in my separate task");
-    // The request in the teammate's thread names the bot that sent it.
-    expect(await snapshot()).toMatch(/Pepper[\s\S]{0,80}sent a request/);
+    expect(await snapshot()).toContain("Pepper → Engineer");
+    expect(await snapshot()).not.toContain("Detailed delivery instructions for the teammate.");
+    const exchangeRefs = (await ui("snapshot")).refs as Record<string, { role: string; name: string }>;
+    const exchange = Object.entries(exchangeRefs).find(([, entry]) => entry.role === "button" && entry.name.includes("Pepper → Engineer"));
+    expect(exchange).toBeDefined();
+    await ui("click", "--ref", "@" + exchange![0]);
+    await expect.poll(snapshot).toContain("Detailed delivery instructions for the teammate.");
+    expect(await snapshot()).toContain("CSV export checked in my separate task");
+    await ui("screenshot", "--out", info.logPath + ".peer-exchange.png");
+    await ui("press", "--keys", "Escape");
+    expect(await snapshot()).not.toContain("Detailed delivery instructions for the teammate.");
     const selected = (await api("/api/bots")).bots.find((bot: any) => bot.id === lead.id);
     expect(selected.threadId).toBe(receipt.threadRef.threadId);
     const evidence = { source: parent.messages, receipt, selectedThread: selected.threadId, final: await snapshot(), screenshot };

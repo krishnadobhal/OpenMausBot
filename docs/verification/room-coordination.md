@@ -64,6 +64,16 @@ At the next start (the runtime's restart policy, `server/runtime/runtime.ts` `op
 
 Regression checks (all use disposable fixtures):
 
+Bot-to-bot request and reply rows are compact by default. Clicking a row opens
+the exchange in a temporary side dialog; Escape closes it and returns focus.
+Settings → Appearance → Show bot-to-bot exchanges inline restores full bubbles
+on this device. Result dialogs keep the existing link to the teammate's thread
+for the complete conversation; result text itself retains the server's existing
+2,000-character receipt limit.
+
+The direct coordination UI fixture checks a multiline brief stays out of chat,
+appears in the exchange dialog with the reply, and is hidden again on Escape.
+
 ```sh
 pnpm exec vitest run server/runtime/ server/runtime-coordinator.test.ts server/direct-coordination.e2e.test.ts server/room-coordination.e2e.test.ts
 pnpm exec vitest run server/delta-context.e2e.test.ts -t "restart"

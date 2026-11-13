@@ -100,6 +100,9 @@ import { RoomBulletin } from "./RoomBulletin";
 import { RoomHeader } from "./RoomHeader";
 import { useChatFindRequests } from "@/lib/chat-find";
 import { simpleRoomHeader } from "@/lib/room-panel";
+import { peerExchanges } from "@/lib/peer-exchange";
+import { useInlinePeerExchanges } from "@/lib/peer-exchange-preference";
+import { PeerExchangeRow } from "./PeerExchange";
 
 export function RoomToolChip({ message, roomId, threadId, live = false }: { message: Message; roomId?: string; threadId?: string; live?: boolean }) {
   const { state, dispatch } = useStore();
@@ -329,6 +332,8 @@ export const Transcript = memo(function Transcript({
   const showToolCalls = showToolCallsEnabled(state.config);
   const canReact = useCanReact(group.threadId);
   const memberOf = (id?: string) => members.find((b) => b.id === id); const messages = useLiveTranscript(group.threadId, saved, transcript, members, roomThreadSpeakerId(group, group.threadId));
+  const inlinePeers = useInlinePeerExchanges();
+  const exchanges = useMemo(() => inlinePeers ? null : peerExchanges(messages, "", group.name), [messages, group.name, inlinePeers]);
   const folds = useMemo(() => roomTurnFolds(messages), [messages, locale]);
   const items = useMemo(() => groupActivityRuns(messages.filter(message =>
     !folds.hiddenIds.has(message.id) &&
@@ -412,7 +417,13 @@ export const Transcript = memo(function Transcript({
           ? { botId: routineOwner.id, threadId: routineExecutionThreadId }
           : undefined;
         const canRetryRoom = m.id === retryableId && retryRequest !== null && !roomBusy;
-        const row = isCancelledTranscriptRow(m) ? (
+        const exchange = exchanges?.get(m.id);
+        const peerResult = !inlinePeers && m.roomRequest?.phase === "result" && m.from;
+        const row = exchange ? <PeerExchangeRow message={m} exchange={exchange} threadId={group.threadId} /> : peerResult ? (
+          <PeerExchangeRow message={m} exchange={{ sender: peerResult.name, recipient: group.name, messages: [m] }} threadId={group.threadId}>
+            <RoomToolChip message={m} roomId={group.id} threadId={group.threadId} />
+          </PeerExchangeRow>
+        ) : isCancelledTranscriptRow(m) ? (
           <CancelledTurnRow onRetry={canRetryRoom ? retryRoom : undefined} />
         ) :
           m.kind === "secret" && m.secret && m.from?.botId ? (
@@ -486,7 +497,7 @@ export const Transcript = memo(function Transcript({
               </div>
             )}
             {divider}
-            {m.from && (
+            {!exchange && !peerResult && m.from && (
               (m.kind === "text" && botTextShowsSpeaker(items, i))
               || (!user && m.kind !== "text" && newCluster && !(m.kind === "activity" && m.comm) && !laterTextOwns(items, i, m.from.botId, m.at))
             ) && (

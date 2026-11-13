@@ -21,6 +21,7 @@ vi.mock("./DesktopCapabilities", async (importOriginal) => ({
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 const { Transcript } = await import("./GroupView");
+const { setInlinePeerExchanges } = await import("@/lib/peer-exchange-preference");
 
 const CANCELLED = "The request was cancelled by the client.";
 const room: Group = {
@@ -51,6 +52,20 @@ beforeEach(() => {
 afterEach(() => {
   flushSync(() => root.unmount());
   host.remove();
+});
+
+it("keeps room handoffs compact and leaves the person's messages visible", () => {
+  setInlinePeerExchanges(false);
+  const request: Message = { id: "handoff", role: "bot", kind: "text", at: 3, from: { botId: "chief", name: "Chief", color: "blue" }, roomRequest: { id: "handoff", phase: "request" }, text: "@Lead Review the export\nDetailed room brief" };
+  render([ask, request]);
+  expect(host.querySelectorAll("[data-peer-exchange]")).toHaveLength(1);
+  expect(host.textContent).toContain("Try the new model");
+  expect(host.textContent).not.toContain("Detailed room brief");
+  try {
+    flushSync(() => setInlinePeerExchanges(true));
+    expect(host.querySelector("[data-peer-exchange]")).toBeNull();
+    expect(host.textContent).toContain("Detailed room brief");
+  } finally { flushSync(() => setInlinePeerExchanges(false)); }
 });
 
 describe("a cancelled turn in a room", () => {

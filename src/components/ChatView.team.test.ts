@@ -19,6 +19,7 @@ const { setColorUserBubbles } = await import("@/lib/user-bubble-preference");
 const { BotEditorStore, initialState } = await import("@/state/store");
 const { t } = await import("@/lib/i18n");
 const { setAdvancedMode } = await import("@/lib/interface-mode");
+const { setInlinePeerExchanges } = await import("@/lib/peer-exchange-preference");
 
 let root: Root;
 let container: HTMLDivElement;
@@ -49,6 +50,25 @@ const draw = (bot: Bot) => {
   flushSync(() => root.render(createElement(BotEditorStore, { value, children: createElement(ChatView, { bot }) })));
 };
 const row = (text: string) => [...container.querySelectorAll<HTMLElement>("[data-message-row]")].find((element) => element.textContent?.includes(text))!;
+
+it("collapses bot requests, replies and result chips, with an immediate inline preference", () => {
+  const request: Message = { id: "request", role: "bot", kind: "text", at: 1, text: "Check the export\nDetailed handoff instructions", roomRequest: { id: "r1", phase: "request" }, from: { botId: "chief", name: "Chief", color: "blue" } };
+  const reply: Message = { id: "reply", role: "bot", kind: "text", at: 2, text: "Export checked\nDetailed reply" };
+  const result: Message = { id: "result", role: "bot", kind: "activity", at: 3, roomRequest: { id: "r2", phase: "result" }, from: { botId: "mira", name: "Mira", color: "teal" }, tool: { name: "Mira replied", ok: true, output: "All checks pass\nDetailed results" } };
+  const bot = luna([request, reply, result]);
+  setInlinePeerExchanges(false);
+  draw(bot);
+  expect(container.querySelectorAll("[data-peer-exchange]")).toHaveLength(3);
+  expect(container.textContent).not.toContain("Detailed handoff instructions");
+  expect(container.textContent).not.toContain("Detailed reply");
+  expect(container.textContent).not.toContain("Detailed results");
+  try {
+    flushSync(() => setInlinePeerExchanges(true));
+    expect(container.querySelector("[data-peer-exchange]")).toBeNull();
+    expect(container.textContent).toContain("Detailed handoff instructions");
+    expect(container.textContent).toContain("Detailed reply");
+  } finally { flushSync(() => setInlinePeerExchanges(false)); }
+});
 
 it("shows a teammate's line in a shared chat as theirs, with their name, and only the viewer's own in their bubble", () => {
   setColorUserBubbles(true);

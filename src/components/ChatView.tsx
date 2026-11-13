@@ -55,6 +55,9 @@ import { TurnPresence } from "./TurnPresence";
 import { showToolCallsEnabled, skillAuthoringEnabled } from "@/lib/feature-flags";
 import { normalizeState, stateForBot } from "@/lib/mascot";
 import { peerLine, peerRequest, type PeerLine } from "@/lib/peer-message";
+import { peerExchanges } from "@/lib/peer-exchange";
+import { useInlinePeerExchanges } from "@/lib/peer-exchange-preference";
+import { PeerExchangeRow } from "./PeerExchange";
 import { showWorkingDots } from "@/lib/turn-tail";
 import { lastNonReceipt } from "@/lib/receipts";
 import { useTurnLive } from "@/state/turn-status"; import { isLiveReply, StreamingReplyContext, streamedReply, useHasLiveReply, useLiveTranscript } from "@/state/live-reply"; import { useTurnNow } from "./NowCard"; import { useThreadRoutineRun } from "@/state/older-routine-runs";
@@ -669,6 +672,8 @@ const MessagesList = memo(function MessagesList({
 }) {
   const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, simple = false } = useChatRows(), busy = use(ChatBusyContext);
   const messages = useLiveTranscript(threadId, saved, transcript);
+  const inlinePeers = useInlinePeerExchanges();
+  const exchanges = useMemo(() => inlinePeers ? null : peerExchanges(messages, botId, botName), [messages, botId, botName, inlinePeers]);
   // A finished turn keeps the bot's progress lines and folds only its tool steps under "Worked for", in both modes.
   const items = useMemo(() => groupTranscript(messages), [messages, locale]);
   const newestMessageId = messages.at(-1)?.id;
@@ -711,6 +716,13 @@ const MessagesList = memo(function MessagesList({
         }
         const m = item.message;
         const row = (() => {
+          const exchange = exchanges?.get(m.id);
+          if (exchange) return <PeerExchangeRow message={m} exchange={exchange} threadId={threadId} />;
+          if (!inlinePeers && m.roomRequest?.phase === "result" && m.from) {
+            return <PeerExchangeRow message={m} exchange={{ sender: m.from.name, recipient: botName, messages: [m] }} threadId={threadId}>
+              <ActivityChip message={m} place={place} />
+            </PeerExchangeRow>;
+          }
           if (isCancelledTranscriptRow(m)) {
             return (
               <CancelledTurnRow
