@@ -72,7 +72,7 @@ function decodePathWithSuffixRemoved(href: string): string {
   }
 }
 
-function referencedPath(
+export function referencedPath(
   href: string,
   portableFileURL = false,
   allowForwardSlashUNC = true,

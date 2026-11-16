@@ -169,6 +169,9 @@ Credentials protect the destination; encryption protects uploaded content. Filen
 
 ### 2D. Restore and existing chat links
 
+- When a person opens a conversation whose managed files have been removed locally, keep its history visible and show an in-chat **Restore and continue** action. Do not require navigating to Storage settings. Opening history alone does not start a download.
+- Restore and continue starts or joins the conversation's durable restore job, shows progress in the chat, and admits a new turn only after the required files have been restored and verified. Preserve the person's draft while restoring; do not send it automatically or twice. Conversations whose files remain local continue normally.
+- Show actionable in-chat failures for an offline destination, expired credentials, insufficient disk space, or failed integrity checks. Preserve history and drafts, keep the cloud copy intact, and offer retry when appropriate. Server-side turn admission must enforce restoration even when a client bypasses the UI.
 - Resolve archived content only after the existing thread/message authorization and referenced-link checks pass. Add archive lookup to the established message-file route; do not create an unauthenticated object proxy, widen file roots, or send presigned bucket URLs to clients.
 - Match the original authorized root and relative path to its archived revision. Locally present files remain authoritative. A missing unrelated local file is still missing; do not search the bucket by filename.
 - Fetch into an exclusive, private temporary file on the target volume, authenticate/decrypt, check SHA-256/length, and only then publish with a no-clobber operation. Keep normal preview/download limits and range behavior after hydration.
@@ -205,6 +208,10 @@ Credentials protect the destination; encryption protects uploaded content. Filen
 - Connection changes/disconnect do not strand existing archives; recovery with exported metadata/key is demonstrated.
 - Review phase 2 changes and full regression evidence in the same PR before merge.
 
+## Remaining work
+
+The phased plan for what is left to build, including the in-chat Restore and continue flow, is in [REMAINING.md](REMAINING.md).
+
 ## Final verification — Prove the whole PR
 
 **How this serves the primary goal:** demonstrate actual space reclamation and recovery, including the failures most likely to lose a person's work.
@@ -217,7 +224,7 @@ Credentials protect the destination; encryption protects uploaded content. Filen
 | Connection | Bad endpoint, denied upload/get/delete, expired credentials, TLS/redirect rejection, path-style MinIO, R2 region. |
 | Integrity | Empty/small/multipart/large files, changed source during transfer, corrupted/truncated object, wrong encryption key/tag, false ETag. |
 | Cleanup | Upload-only retains files, missing confirmation, stale preview, changed inode/content, busy admission race, failure at each journal/quarantine boundary. |
-| Restore | One file/all files, old chat links, ranges/previews, offline bucket, low disk, edited destination, simultaneous clicks, interrupted restore, turn hydration. |
+| Restore | One file/all files, old chat links, ranges/previews, offline bucket, low disk, edited destination, simultaneous clicks, interrupted restore, turn hydration; in-chat Restore and continue, progress, preserved drafts, retry, no download just to read history, no turn before verified restore, no duplicate send. |
 | Scheduling | Disabled default, old/closed eligibility, missed intervals, pause/cancel, busy/uncertain threads, restored-file grace, no automatic deletion. |
 | Recovery | Restart at each persisted state; encrypted backup/recovery export on a fresh fixture; reconnect; destination changes; key preservation. |
 | Regressions | Existing attachment accounting/clear, thread archival, folder continuity, cloud sync, workspace/team backups, secret exclusion. |

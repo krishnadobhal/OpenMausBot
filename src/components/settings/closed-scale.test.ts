@@ -62,6 +62,8 @@ const FILES = [
   "src/components/SidebarProfileMenu.tsx",
   "src/components/SkillReviewSettings.tsx",
   "src/components/SkinPicker.tsx",
+  "src/components/StorageArchiveSettings.tsx",
+  "src/components/StorageSettings.tsx",
   "src/components/SwatchRadios.tsx",
   "src/components/ThreadCleanupSettings.tsx",
   "src/components/ThreadConcurrencySettings.tsx",

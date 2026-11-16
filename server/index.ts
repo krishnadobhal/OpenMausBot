@@ -318,7 +318,7 @@ import {
 import * as tts from "./tts/index.ts";
 import { voiceNoteFailure } from "./tts/errors.ts";
 import { createDecider, deciderReady, describeDecider } from "./decider/index.ts"; import { createExtractor, describeHelpers } from "./extractor/index.ts";
-import { createStopLineRoutes } from "./routes/stop-line.ts"; import { decideRoomResponder } from "./decider/room-routing.ts"; import { roomRoutingInput } from "./host/room-routing-input.ts";
+import { createStopLineRoutes } from "./routes/stop-line.ts"; import { createStorageRoutes } from "./routes/storage.ts"; import { createStorageArchive } from "./storage-archive.ts";import { decideRoomResponder } from "./decider/room-routing.ts"; import { roomRoutingInput } from "./host/room-routing-input.ts";
 import { createLiveSession, liveAttachUrl, liveHistoryFrom, LiveSessionError, type LiveBot, type LiveHistoryMessage } from "./live-call.ts";
 import { LiveCallController, LiveCallSignedOutError, openLiveSocket } from "./live-call-controller.ts";
 import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSettings } from "./live-settings.ts"; import { azureLiveCallRefusal, liveScopeRefusal } from "./live-access.ts";
@@ -673,6 +673,11 @@ if (existsSync(join(DATA_DIR, ".backups"))) {
   if (workspaceRestore.restored) restoredAtStart = workspaceRestore.id;
   if (!workspaceRestore.restored && !workspaceRestore.rolledBack) workspaceRestore = readLastWorkspaceRestore(DATA_DIR) ?? workspaceRestore;
 } dataFormatAtStart("stamp", DATA_DIR, serverVersion());
+const storageArchive = createStorageArchive({
+  dataDir: DATA_DIR,
+  thread: (botId, threadId) => { const bot = store.bot(botId), task = store.taskByThread(botId, threadId); return bot && task ? { botName: bot.name, title: task.title } : null; },
+  busy: (botId, threadId) => threadBusy(botId, threadId) || workspaceMaintenance.active || moveFreeze.frozen(),
+});
 const workspaceMaintenance = new WorkspaceBackupMaintenance(), moveFreeze = createMoveFreeze({ dataDir: DATA_DIR, exportOnly: (process.env.OMB_CLOUD_ROLE === "home" || process.env.OMB_CLOUD_ROLE === "team") && process.env.OMB_CLOUD_EXPORT_ONLY === "1" });
 // Only after ensureDirs(), whose one-time legacy data-dir rename must not find ~/.openmausbot already there.
 const ENVIRONMENT_ID = loadEnvironmentId(DATA_DIR);
@@ -7503,7 +7508,16 @@ function threadTitleGate(bot: Pick<BotRecord, "modelSelection">): { ok: true; in
 const titleRegenerations = new Set<string>();
 
 /** The turn's start saves its thread's bookkeeping (title, last asked, read) once, when its synchronous part returns. */
-function startTurn(...args: Parameters<typeof beginTurn>): ReturnType<typeof beginTurn> { return batchSaves(() => beginTurn(...args)); }
+async function startTurn(...args: Parameters<typeof beginTurn>): ReturnType<typeof beginTurn> {
+  const threadId = args[2]?.threadId ?? store.bot(args[0])?.threadId;
+  // Awaited only when files must come back first: beginTurn's synchronous start stays inside batchSaves.
+  const release = !threadId ? () => {} : storageArchive.evicted(args[0], threadId) ? await storageArchive.admit(args[0], threadId) : storageArchive.enter(threadId);
+  try {
+    return await batchSaves(() => beginTurn(...args));
+  } finally {
+    release();
+  }
+}
 async function beginTurn(
   botId: string,
   text: string,
@@ -12087,6 +12101,7 @@ const cloudMoveRoutes = createCloudMoveRoutes();
 
 // `workspaceAccess` is assigned at boot, after this line: read it per request.
 ROUTES.push(createHostedSlackRoutes({ bot: (id) => store.bot(id), hostedReady: () => Boolean(workspaceAccess) && entitled("admin") })); ROUTES.push(createStopLineRoutes());
+ROUTES.push(createStorageRoutes({ sources: () => ({ dataDir: DATA_DIR, bots: store.bots, groups: store.groups }), visible: (auth) => visibleTo(viewerFor(auth)), archive: storageArchive }));
 const orgInstallStatuses = () => orgLibrary?.installStatuses() ?? new Map();
 ROUTES.push(createBotPresetRoutes({ presets: presetStore, orgStatuses: orgInstallStatuses })); ROUTES.push(createWorkspaceBannerRoutes({ changed: () => broadcast({ kind: "config", ...configStatus() }) })); ROUTES.push(createStarterAwakeRoutes({ awake: starterAwake }));
 ROUTES.push(createSharedComputerRoutes({ enabled: (auth) => lendingEnabled() || (ownerLends() && ownHome.owner(auth)), computers: sharedComputers, sessionLive: (id) => sessions.isLive(id), environmentId: ENVIRONMENT_ID,
@@ -12127,7 +12142,7 @@ ROUTES.push(createThreadRoutes({
   companionMutationToken: () => companionMutationToken,
   cliOwnerToken: () => cliOwnerToken,
   pageSize, messagePage, messageWindow, publicBotQueuedMessages, publicGroupState, wireBot,
-  botComputerControlSnapshot, messageFileRootsForThread, viewerFor, visibleTo, coordinator, groupThreadIsWorking, memberDefaultBot: CLOUD_TEAM ? (email) => { const own = ensureDefaultBot(store, { dataDir: DATA_DIR, person: email, team: CLOUD_TEAM.name, opened: (made) => void mausbotOwnChat.claim(made) }); if (own) void mausbotOwnChat.claim(own); return own; } : undefined,
+  botComputerControlSnapshot, messageFileRootsForThread, archivedFile: storageArchive.hydrate, viewerFor, visibleTo, coordinator, groupThreadIsWorking, memberDefaultBot: CLOUD_TEAM ? (email) => { const own = ensureDefaultBot(store, { dataDir: DATA_DIR, person: email, team: CLOUD_TEAM.name, opened: (made) => void mausbotOwnChat.claim(made) }); if (own) void mausbotOwnChat.claim(own); return own; } : undefined,
   uploads: uploadsFor(createUploadOwners(DATA_DIR), Boolean(CLOUD_TEAM)),
   attachmentInUse: (name) => threadsReferencing(name).length > 0 || store.bots.some((bot) => bot.avatarUrl === `/api/attachments/${name}`),
   keptAttachments: CLOUD_TEAM ? undefined : keptAttachments,

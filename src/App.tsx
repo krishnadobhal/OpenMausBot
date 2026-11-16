@@ -30,6 +30,7 @@ import { WorkspaceBackupRecovery } from "@/components/WorkspaceBackupSettings";
 import { NotificationRail, NotificationsPanel } from "@/components/NotificationsPanel";
 import { useNotificationFeed } from "@/lib/notification-preferences";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { StorageWarning } from "@/components/StorageWarning";
 import { AppNotices } from "@/components/AppNotices";
 import { AppGrantNotice } from "@/components/AppGrantPrompt";
 import { BotLimitPopup } from "@/components/BotLimitPopup";
@@ -326,6 +327,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     <LiveConnectionStrip connected={state.connected} hydrated={state.hydrated === true} />
     <CloudSendStrip cloudHome={state.config?.cloudHome === true} />
     <HomeLine />
+    <StorageWarning />
     <AppNotices quiet={paletteOpen || drawerOpen || Boolean(localVmWorkspaceBotId)} viewer={viewer} />
   </>;
   return (

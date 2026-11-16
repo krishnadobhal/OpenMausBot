@@ -18,7 +18,7 @@ import type { GroupUsageReader } from "../group-thread-usage.ts";
 import { readMessage, searchMessagesAsync } from "../message-db.ts";
 import {
   listMessageFolder, MESSAGE_FILE_DOWNLOAD_MAX_BYTES, MESSAGE_FILE_MAX_BYTES, messageAttachmentName, messageFileDisposition, messageFileDownloadName, messageFolderEntryName,
-  messageImageTargetAt, messageReferencesFile, openMessageFile, openMessageFolderEntry, referencedFileName,
+  messageImageTargetAt, messageReferencesFile, openMessageFile, openMessageFolderEntry, referencedFileName, referencedPath,
 } from "../message-file.ts";
 import { resolveRequestAuth, type RequestAuth, type ResolveOptions } from "../request-auth.ts";
 import type { queuedSteerSnapshot } from "../steer-queue.ts";
@@ -57,6 +57,8 @@ export interface ThreadRouteDeps {
   wireBot(bot: BotRecord): WireBot;
   botComputerControlSnapshot(botId: string): ReturnType<ComputerControl["snapshot"]>;
   messageFileRootsForThread(senderId: string, threadId: string): string[];
+  /** Brings a linked file back from cloud storage when it was archived from exactly that place. */
+  archivedFile?(senderId: string, roots: readonly string[], requested: string, maxBytes: number): Promise<boolean>;
   viewerFor(auth: RequestAuth): Viewer;
   /** A room's unread mark as this person has read it (a Team Cloud); the room as it is anywhere else. */
   groupFor?(auth: RequestAuth, group: WireGroup): WireGroup;
@@ -77,7 +79,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
     store, userName: userNameFor, sessions, groupUsageReader, lendingEnabled,
     hostedWorkspace: HOSTED_WORKSPACE, sessionCookie: SESSION_COOKIE, loopback: LOOPBACK, defaultPage: DEFAULT_PAGE,
     pageSize, messagePage, messageWindow, publicBotQueuedMessages, publicGroupState, wireBot,
-    botComputerControlSnapshot, messageFileRootsForThread, viewerFor, visibleTo,
+    botComputerControlSnapshot, messageFileRootsForThread, archivedFile, viewerFor, visibleTo,
   } = deps;
   // tasks stays explicit: clients expect [] where wireBot() would omit the key.
   const shownBot = (bot: BotRecord, visible: VisibleSet, limit: number | undefined) => {
@@ -210,6 +212,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       if (!href) return json(res, 400, { error: "path is required" });
 
       let roots: string[];
+      let linkSender: string | undefined;
       let downloadName: string | undefined;
       const botAttachment = message.role === "bot"
         ? message.attachments?.find((attachment) => attachment.path === href)
@@ -235,6 +238,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         const runThread = message.automation?.executionThreadId;
         const fromRun = runThread && store.botByThread(runThread)?.id === senderId ? messageFileRootsForThread(senderId, runThread) : [];
         roots = [...new Set([...messageFileRootsForThread(senderId, threadId), ...fromRun])];
+        linkSender = senderId;
       }
 
       const folderEntry = method === "POST" && body.entry !== undefined
@@ -255,7 +259,10 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
           ? referencedFileName(href)
           : null;
         const copy = name ? deliveredCopy(store.messagesFor(threadId), message, name) : null;
-        if (copy) {
+        const fileRoots = roots.filter((root) => root !== ATTACHMENTS_DIR);
+        if (linkSender && !folderEntry && status === 404 && await archivedFile?.(linkSender, fileRoots, referencedPath(href), maxBytes).catch(() => false)) {
+          file = await openMessageFile(href, roots, maxBytes);
+        } else if (copy) {
           file = await openMessageFile(copy.path, [ATTACHMENTS_DIR], maxBytes);
           downloadName = copy.name;
         } else {
