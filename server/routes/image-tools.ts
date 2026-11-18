@@ -68,6 +68,8 @@ export interface ImageToolDeps {
   /** A person's own line started this turn's work, from the harness's records (server/peer-provenance.ts, and a room
    * run's request line): never a routine, a webhook, an app, a guest or a goal's coordinator, whose images never land. */
   personTurn: boolean;
+  /** The bot whose turn asks: Higgsfield, a connected MCP server, is open only to the bots Bot access gives it. */
+  botId?: string;
   daily: ImageDailyCap;
   fetchImpl?: typeof fetch;
   turn: ImageTurn | null;
@@ -102,7 +104,7 @@ export async function generateImageForTurn(raw: unknown, deps: ImageToolDeps, ed
       return { status: 400, body: { error: `${imageProviderName(provider)} is not one of the person's image providers: ${set}. Use one of those, or ask the person to change it in Settings.` } };
     }
     if (!(base && backup)) slot = base ? "primary" : "fallback";
-  } else if (!imageGenerationReady(deps.cfg)) {
+  } else if (!imageGenerationReady(deps.cfg, deps.botId)) {
     return { status: 409, body: { error: IMAGE_MESSAGES.notSetUp } };
   }
 
@@ -110,7 +112,7 @@ export async function generateImageForTurn(raw: unknown, deps: ImageToolDeps, ed
   let made = false;
   deps.inFlight.set(turn.key, (deps.inFlight.get(turn.key) ?? 0) + 1);
   try {
-    const image = await generateImage(deps.cfg, { prompt, aspect, ...(format && { gif: { frames, frameDurationMs } }), ...(edit && { edit }) }, { slot, fetchImpl: deps.fetchImpl, signal: deps.signal });
+    const image = await generateImage(deps.cfg, { prompt, aspect, ...(format && { gif: { frames, frameDurationMs } }), ...(edit && { edit }) }, { slot, fetchImpl: deps.fetchImpl, signal: deps.signal, ...(deps.botId && { botId: deps.botId }) });
     made = true;
     if (!turn.attach({ bytes: image.bytes, mime: image.mime })) return { status: 409, body: { error: IMAGE_MESSAGES.noTurn } };
     const backup = image.usedFallback ? `, the person's backup image provider${image.baseError ? `, because the base failed: ${image.baseError}` : ""}` : "";
@@ -136,6 +138,7 @@ export interface ImageRouteContext {
   threadId: string;
   requireActive: () => void;
   personTurn: boolean;
+  botId?: string;
   folders: BotFolders;
 }
 
@@ -184,7 +187,7 @@ export function createImageToolRoutes(deps: ImageTurnStore & { config: () => Ima
         if (problem) return ctx.json(ctx.res, 400, { error: problem });
         edit = { image: image as ImageInput, ...(markup && { markup: markup as ImageInput }) };
       }
-      const outcome = await generateImageForTurn(editing ? { prompt: (body as { prompt: string }).prompt } : body, { cfg: deps.config(), personTurn: ctx.personTurn, daily, fetchImpl: deps.fetchImpl, turn, inFlight, signal: call.signal }, edit);
+      const outcome = await generateImageForTurn(editing ? { prompt: (body as { prompt: string }).prompt } : body, { cfg: deps.config(), personTurn: ctx.personTurn, ...(ctx.botId && { botId: ctx.botId }), daily, fetchImpl: deps.fetchImpl, turn, inFlight, signal: call.signal }, edit);
       ctx.json(ctx.res, outcome.status, outcome.body);
     },
   };

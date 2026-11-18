@@ -183,15 +183,15 @@ export function primaryImageSlot(cfg: ImageCredentials): ImageSlot {
   return imageSlots(cfg).primary;
 }
 
-export function imageSlotConfigured(cfg: ImageCredentials, slot: ImageSlot): boolean {
+export function imageSlotConfigured(cfg: ImageCredentials, slot: ImageSlot, botId?: string): boolean {
   if (slot.provider === "custom") return Boolean(customImageUrl(cfg) && slot.model);
-  if (slot.provider === "higgsfield") return higgsfieldReady() && Boolean(slot.model);
+  if (slot.provider === "higgsfield") return higgsfieldReady(botId) && Boolean(slot.model);
   return Boolean(PROVIDERS[slot.provider].key(cfg)?.trim() && slot.model);
 }
 
-export function imageGenerationReady(cfg: ImageCredentials): boolean {
+export function imageGenerationReady(cfg: ImageCredentials, botId?: string): boolean {
   const { primary, fallback } = imageSlots(cfg);
-  return imageSlotConfigured(cfg, primary) || Boolean(fallback && imageSlotConfigured(cfg, fallback));
+  return imageSlotConfigured(cfg, primary, botId) || Boolean(fallback && imageSlotConfigured(cfg, fallback, botId));
 }
 
 /** The image API returns base64 JSON, so a byte cap on the untrusted body is the real memory boundary. */
@@ -243,12 +243,13 @@ export async function generateImageWith(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = IMAGE_GENERATION_TIMEOUT_MS,
   cancel?: AbortSignal,
+  botId?: string,
 ): Promise<GeneratedImage> {
   const provider = PROVIDERS[slot.provider];
-  if (!imageSlotConfigured(cfg, slot)) fail(provider.missing, 409, true);
+  if (!imageSlotConfigured(cfg, slot, botId)) fail(provider.missing, 409, true);
   if (slot.provider === "higgsfield") {
     if (request.edit || request.gif) fail("Higgsfield makes new images only: no edits or animated GIFs", 409, true);
-    return generateHiggsfieldImage({ model: slot.model, prompt: request.prompt, ...(request.aspect && { aspect: request.aspect }) }, { ...(cancel && { signal: cancel }) });
+    return generateHiggsfieldImage({ model: slot.model, prompt: request.prompt, ...(request.aspect && { aspect: request.aspect }) }, { ...(cancel && { signal: cancel }), ...(botId && { botId }) });
   }
 
   const apiKey = provider.key(cfg)?.trim();
@@ -356,11 +357,11 @@ export async function generateImageWith(
 export async function generateImage(
   cfg: ImageCredentials,
   request: ImageRequest,
-  options: { slot?: "primary" | "fallback"; fetchImpl?: typeof fetch; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: { slot?: "primary" | "fallback"; fetchImpl?: typeof fetch; timeoutMs?: number; signal?: AbortSignal; botId?: string } = {},
 ): Promise<GeneratedSlotImage> {
   const { primary, fallback } = imageSlots(cfg);
   const attempt = async (slot: ImageSlot, usedFallback: boolean): Promise<GeneratedSlotImage> => ({
-    ...await generateImageWith(cfg, slot, request, options.fetchImpl, options.timeoutMs, options.signal),
+    ...await generateImageWith(cfg, slot, request, options.fetchImpl, options.timeoutMs, options.signal, options.botId),
     ...slot,
     usedFallback,
   });

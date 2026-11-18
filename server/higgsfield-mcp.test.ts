@@ -85,6 +85,11 @@ describe("generateHiggsfieldImage", () => {
     await expect(generateHiggsfieldImage(request)).rejects.toMatchObject({ status: code, neverStarted: never });
   });
 
+  it("keeps a job that ran and failed with credit wording from the backup", async () => {
+    await setup({ status: [{ generation: { status: "in_progress" } }, { generation: { status: "failed", error: "insufficient credits" } }] });
+    await expect(generateHiggsfieldImage(request)).rejects.toMatchObject({ status: 402, neverStarted: false });
+  });
+
   it("stops after three failed polls without sending generate again", async () => {
     const run = await setup({ failStatus: true });
     await expect(generateHiggsfieldImage(request)).rejects.toBeInstanceOf(HiggsfieldError);
@@ -216,6 +221,12 @@ describe("the Higgsfield connection", () => {
     accessToken: async () => "token-1",
     tokenRefused: async () => "refreshed" as const,
   }) as never;
+
+  it("is open only to the bots the server list names for it", () => {
+    const backend = createHiggsfieldBackend({ servers: (botId) => (botId === "iris" ? { higgsfield: row("https://mcp.higgsfield.ai/mcp") } : {}), oauth: oauth() });
+    expect(backend.ready("iris")).toBe(true);
+    expect(backend.ready("paul")).toBe(false);
+  });
 
   it("is the enabled row at Higgsfield's exact address, signed in", () => {
     expect(createHiggsfieldBackend({ servers: () => ({ higgsfield: row("https://mcp.higgsfield.ai/mcp") }), oauth: oauth() }).ready()).toBe(true);

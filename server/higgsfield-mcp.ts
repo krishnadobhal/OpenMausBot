@@ -36,9 +36,9 @@ export class HiggsfieldError extends Error {
 }
 
 export interface HiggsfieldBackend {
-  ready(): boolean;
-  spec(): Promise<RemoteMcpSpec | null>;
-  refused?(): Promise<"refreshed" | "ended" | "again" | "unknown">;
+  ready(botId?: string): boolean;
+  spec(botId?: string): Promise<RemoteMcpSpec | null>;
+  refused?(botId?: string): Promise<"refreshed" | "ended" | "again" | "unknown">;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
@@ -65,9 +65,9 @@ function isHiggsfieldAddress(url: string): boolean {
   return address.origin === HIGGSFIELD_MCP_ORIGIN && (address.pathname === HIGGSFIELD_MCP_PATH || address.pathname === `${HIGGSFIELD_MCP_PATH}/`);
 }
 
-export function createHiggsfieldBackend(deps: { servers: () => Record<string, unknown> | undefined; oauth: McpOAuthManager }): HiggsfieldBackend {
-  const connection = () => {
-    for (const [name, raw] of Object.entries(deps.servers() ?? {})) {
+export function createHiggsfieldBackend(deps: { servers: (botId?: string) => Record<string, unknown> | undefined; oauth: McpOAuthManager }): HiggsfieldBackend {
+  const connection = (botId?: string) => {
+    for (const [name, raw] of Object.entries(deps.servers(botId) ?? {})) {
       const parsed = parseStoredMcpServer(name, raw);
       if (parsed.ok && isRemoteMcpServer(parsed.server) && "enabled" in parsed.server && parsed.server.enabled
         && parsed.server.type === "http" && isHiggsfieldAddress(parsed.server.url)) return { name, server: parsed.server };
@@ -75,19 +75,19 @@ export function createHiggsfieldBackend(deps: { servers: () => Record<string, un
     return null;
   };
   return {
-    ready: () => {
-      const found = connection();
+    ready: (botId) => {
+      const found = connection(botId);
       return found !== null && deps.oauth.authState(found.name, found.server.url) === "signed-in";
     },
-    spec: async () => {
-      const found = connection();
+    spec: async (botId) => {
+      const found = connection(botId);
       if (!found) return null;
       const signedIn = await withMcpSignIn({ [found.name]: found.server }, deps.oauth);
       const spec = signedIn[found.name];
       return spec && isRemoteMcpServer(spec) ? spec : null;
     },
-    refused: async () => {
-      const found = connection();
+    refused: async (botId) => {
+      const found = connection(botId);
       return found ? deps.oauth.tokenRefused(found.name, found.server.url) : "unknown";
     },
   };
@@ -99,8 +99,8 @@ export function configureHiggsfield(next: HiggsfieldBackend | null): void {
   backend = next;
 }
 
-export function higgsfieldReady(): boolean {
-  return backend?.ready() ?? false;
+export function higgsfieldReady(botId?: string): boolean {
+  return backend?.ready(botId) ?? false;
 }
 
 const signInAgain = () => new HiggsfieldError("Sign in to Higgsfield again in Plugins", 401, true);
@@ -212,7 +212,7 @@ function settled(generation: Json): string | HiggsfieldError | null {
   return null;
 }
 
-export async function generateHiggsfieldImage(request: HiggsfieldImageRequest, options: { signal?: AbortSignal } = {}): Promise<HiggsfieldImage> {
+export async function generateHiggsfieldImage(request: HiggsfieldImageRequest, options: { signal?: AbortSignal; botId?: string } = {}): Promise<HiggsfieldImage> {
   const host = backend;
   if (!host) throw new HiggsfieldError("Connect Higgsfield in Plugins first", 409, true);
   const fetchImpl = host.fetchImpl ?? fetch;
@@ -225,7 +225,7 @@ export async function generateHiggsfieldImage(request: HiggsfieldImageRequest, o
   };
 
   const open = async (refreshed: boolean): Promise<RemoteMcpClient> => {
-    const spec = await host.spec();
+    const spec = await host.spec(options.botId);
     if (!spec) throw signInAgain();
     const client = new RemoteMcpClient(spec, { fetch: fetchImpl });
     try {
@@ -235,7 +235,7 @@ export async function generateHiggsfieldImage(request: HiggsfieldImageRequest, o
       await client.close().catch(() => {});
       if (signal.aborted) return stopped();
       if (error instanceof McpHttpError && error.status === 401) {
-        if (!refreshed && host.refused && (await host.refused()) === "refreshed") return open(true);
+        if (!refreshed && host.refused && (await host.refused(options.botId)) === "refreshed") return open(true);
         throw signInAgain();
       }
       throw new HiggsfieldError("Could not reach Higgsfield", 502, true);
@@ -270,32 +270,37 @@ export async function generateHiggsfieldImage(request: HiggsfieldImageRequest, o
     const id = text(job?.id);
     if (!job || !id) throw new HiggsfieldError("Higgsfield image generation failed", 502);
 
-    let file = settled(job);
-    for (let failures = 0; file === null;) {
-      let answer: Json;
-      try {
-        answer = await call("job_status", { jobId: id, sync: true });
-        failures = 0;
-      } catch (error) {
-        failures += 1;
-        if (failures >= POLL_FAILURES || signal.aborted) throw error;
-        await sleep(POLL_DEFAULT_MS, signal).catch(stopped);
-        continue;
+    const accepted = <T>(run: () => Promise<T>): Promise<T> => run().catch((error: unknown) => {
+      throw error instanceof HiggsfieldError && error.neverStarted ? new HiggsfieldError(error.message, error.status) : error;
+    });
+    return await accepted(async () => {
+      let file = settled(job);
+      for (let failures = 0; file === null;) {
+        let answer: Json;
+        try {
+          answer = await call("job_status", { jobId: id, sync: true });
+          failures = 0;
+        } catch (error) {
+          failures += 1;
+          if (failures >= POLL_FAILURES || signal.aborted) throw error;
+          await sleep(POLL_DEFAULT_MS, signal).catch(stopped);
+          continue;
+        }
+        const generation = isRecord(answer.generation) ? answer.generation : null;
+        if (!generation) throw new HiggsfieldError("Higgsfield image generation failed", 502);
+        file = settled(generation);
+        if (file === null) {
+          const seconds = answer.poll_after_seconds;
+          const wait = typeof seconds === "number" && Number.isFinite(seconds)
+            ? Math.min(POLL_RANGE_S.max, Math.max(POLL_RANGE_S.min, seconds)) * 1000 : POLL_DEFAULT_MS;
+          await sleep(wait, signal).catch(stopped);
+        }
       }
-      const generation = isRecord(answer.generation) ? answer.generation : null;
-      if (!generation) throw new HiggsfieldError("Higgsfield image generation failed", 502);
-      file = settled(generation);
-      if (file === null) {
-        const seconds = answer.poll_after_seconds;
-        const wait = typeof seconds === "number" && Number.isFinite(seconds)
-          ? Math.min(POLL_RANGE_S.max, Math.max(POLL_RANGE_S.min, seconds)) * 1000 : POLL_DEFAULT_MS;
-        await sleep(wait, signal).catch(stopped);
-      }
-    }
-    if (file instanceof HiggsfieldError) throw file;
-    return await download(file, fetchImpl, signal).catch((error: unknown) => {
-      if (signal.aborted) return stopped();
-      throw error;
+      if (file instanceof HiggsfieldError) throw file;
+      return await download(file, fetchImpl, signal).catch((error: unknown) => {
+        if (signal.aborted) return stopped();
+        throw error;
+      });
     });
   } finally {
     await client.close().catch(() => {});
