@@ -48,7 +48,7 @@ export const SETTINGS_PLACES = [
   {"id":"keys","path":"Settings → AI → Other services","words":["api keys","api key","keys","key","openai","anthropic","xai","openrouter","router","base url","mistral","groq","cerebras","deepseek","opencode","composio","elevenlabs"]},
   {"id":"backup-model","path":"Settings → AI → Backup model → Automatic recovery","words":["backup model","fallback","recovery"],"advanced":true},
   {"id":"routing","path":"Settings → AI → Routing and extraction","words":["decision and extraction","decision","extraction","routing","who answers","jev","typesafe","cloudflare","workers ai"],"advanced":true},
-  {"id":"images","path":"Settings → AI → Images","words":["image generation","images","generate","picture"],"advanced":true},
+  {"id":"images","path":"Settings → AI → Images","words":["image generation","images","generate","picture","higgsfield"],"advanced":true},
   {"id":"about-you","path":"Settings → You and your bots → About you","words":["name","my name","photo","avatar","picture","profile","profile picture","about me","rules","rules for every bot"],"advanced":true},
   {"id":"away-emails","path":"Settings → You and your bots → About you → Email me when I'm away","words":["away","emails","email me"],"advanced":true},
   {"id":"new-bots","path":"Settings → You and your bots → New bots","words":["defaults","effort","reasoning","preset","share as preset"],"advanced":true},
