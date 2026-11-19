@@ -7,6 +7,8 @@ export interface GrokFollowUp {
   present: boolean;
   /** Its string value. */
   value?: string;
+  /** Character offsets of a replaceable value, excluding whitespace and comments. */
+  valueRange?: { start: number; end: number };
   /** Where a line goes to land inside an existing `[ui]` table: the end of its header line. */
   insertAt?: number;
   /** `ui` is defined by dotted keys or an inline table, so a `[ui]` table cannot be added. */
@@ -25,6 +27,7 @@ const INLINE_KEY = /(?:^|[{,])\s*(?:follow_up_behavior|"follow_up_behavior"|'fol
 const unescape = (text: string) => text.replace(/\\(.)/g, "$1");
 const unquote = (key: string) => key.startsWith('"') ? unescape(key.slice(1, -1)) : key.startsWith("'") ? key.slice(1, -1) : key;
 const keyPath = (path: string): string[] => (path.match(new RegExp(KEY, "g")) ?? []).map(unquote);
+const hasEscapedKey = (path: string) => (path.match(new RegExp(KEY, "g")) ?? []).some((key) => key.startsWith('"') && key.includes("\\"));
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((part, i) => part === b[i]);
 
 function basicStringEnd(text: string, open: number): number {
@@ -84,22 +87,33 @@ export function readGrokFollowUp(text: string): GrokFollowUp {
     if (/^\s*(#.*)?$/.test(line)) continue;
     const header = HEADER.exec(line);
     if (header) {
+      if (hasEscapedKey(header[2])) result.unclear = true;
       const path = keyPath(header[2]);
       table = header[1] === "[[" ? null : path;
       if (header[1] === "[[" && same(path, ["ui"])) result.uiElsewhere = true;
-      if (table && same(table, ["ui"]) && result.insertAt === undefined) result.insertAt = ends[i];
+      if (table && same(table, ["ui"])) {
+        if (result.insertAt !== undefined || result.uiElsewhere) result.unclear = true;
+        result.insertAt = ends[i];
+      }
       continue;
     }
     const assign = ASSIGN.exec(line);
     if (!assign) { result.unclear = true; return result; }
+    if (hasEscapedKey(assign[1])) result.unclear = true;
     let rest = withoutComment(assign[2]).trim();
     if (rest.startsWith('"""') || rest.startsWith("'''")) { result.unclear = true; return result; }
+    const assignmentLine = i;
     while (openDepth(rest) > 0 && i + 1 < lines.length) rest += " " + withoutComment(lines[++i].replace(/\r$/, "")).trim();
     if (table === null) continue;
     const path = [...table, ...keyPath(assign[1])];
     if (same(path, ["ui", "follow_up_behavior"])) {
+      if (result.present) result.unclear = true;
       result.present = true;
       result.value = stringValue(rest);
+      if (i === assignmentLine && result.value !== undefined && /^(?:"(?:[^"\\]|\\.)*"|'[^']*')$/.test(rest)) {
+        const start = (ends[i - 1] ?? 0) + line.length - assign[2].length;
+        result.valueRange = { start, end: start + rest.length };
+      }
       if (table.length === 0) result.uiElsewhere = true;
     } else if (same(path, ["ui"])) {
       result.uiElsewhere = true;
